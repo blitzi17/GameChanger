@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GameChanger — HR Calabarzon</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* ════════════════════════════════════════════
+   SHARED TOKENS
+════════════════════════════════════════════ */
+:root {
+  --red:#E53935; --red-l:#FFEBEE; --red-d:#B71C1C;
+  --blue:#1976D2; --blue-l:#E3F2FD; --blue-d:#0D47A1;
+  --yellow:#FFC107; --yellow-l:#FFF8E1;
+  --green:#2E7D32; --green-l:#E8F5E9;
+  --purple:#6A1B9A; --purple-l:#F3E5F5;
+  --teal:#00695C; --teal-l:#E0F2F1;
+  --orange:#E65100; --orange-l:#FBE9E7;
+  --bg:#F4F6FB; --white:#FFFFFF;
+  --border:#E2E8F0; --border2:#CBD5E1;
+  --t1:#0F172A; --t2:#475569; --t3:#94A3B8;
+  --sh-xs:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --sh-sm:0 2px 8px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.03);
+  --sh-md:0 8px 24px rgba(0,0,0,.1);
+  --sh-lg:0 20px 48px rgba(0,0,0,.16);
+  --font-h:'Plus Jakarta Sans',sans-serif;
+  --font-b:'DM Sans',sans-serif;
+  --r1:8px; --r2:12px; --r3:16px; --r4:20px;
+  --sb:220px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-b);background:var(--bg);color:var(--t1);min-height:100vh;overflow-x:hidden;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:20px;}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:translateY(0);}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.91);}to{opacity:1;transform:scale(1);}}
+@keyframes slideUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0;}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+/* ════════════════════════════════════════════
+   SHARED LOGIN
+════════════════════════════════════════════ */
+.login-shell{min-height:100vh;display:flex;}
+.login-hero{flex:1;background:linear-gradient(145deg,#0D1B2A 0%,#1A237E 50%,#B71C1C 100%);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;}
+.login-hero::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M0 0h40v40H0zm40 40h40v40H40z'/%3E%3C/g%3E%3C/svg%3E");}
+.lh-content{position:relative;z-index:2;text-align:center;color:white;}
+.lh-logo{width:64px;height:64px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.2);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-family:var(--font-h);font-weight:800;font-size:22px;backdrop-filter:blur(8px);}
+.lh-title{font-family:var(--font-h);font-size:42px;font-weight:800;line-height:1.1;margin-bottom:10px;}
+.lh-title span{color:var(--yellow);}
+.lh-sub{font-size:14px;opacity:.75;max-width:300px;line-height:1.7;margin:0 auto;}
+.lh-stats{display:flex;gap:28px;margin-top:32px;justify-content:center;}
+.lh-stat .n{font-family:var(--font-h);font-size:26px;font-weight:800;}
+.lh-stat .l{font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:.06em;}
+.lh-badges{display:flex;gap:8px;margin-top:22px;flex-wrap:wrap;justify-content:center;}
+.lh-badge{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:600;backdrop-filter:blur(4px);}
+.lf-side{width:460px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;background:white;}
+.lf-logo{display:flex;align-items:center;gap:10px;margin-bottom:26px;}
+.lf-logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--red),var(--blue));border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--font-h);font-weight:800;color:white;font-size:14px;}
+.lf-logo-name{font-family:var(--font-h);font-weight:700;font-size:15px;}
+.lf-logo-sub{font-size:10px;color:var(--t3);}
+.role-toggle{display:flex;background:var(--bg);border-radius:10px;padding:4px;width:100%;margin-bottom:22px;gap:4px;}
+.role-btn{flex:1;padding:9px;border-radius:8px;border:none;font-family:var(--font-b);font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;color:var(--t2);background:transparent;}
+.role-btn.active{background:white;color:var(--t1);box-shadow:var(--sh-xs);}
+.role-btn.active.rb-admin{color:var(--red);}
+.role-btn.active.rb-member{color:var(--blue);}
+.lf-title{font-family:var(--font-h);font-size:22px;font-weight:700;margin-bottom:4px;width:100%;}
+.lf-sub{font-size:13px;color:var(--t2);margin-bottom:22px;width:100%;}
+.fg{width:100%;margin-bottom:14px;}
+.fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--t2);margin-bottom:6px;}
+.fi{width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid var(--border);font-family:var(--font-b);font-size:14px;outline:none;transition:border .18s;background:#FAFBFC;color:var(--t1);}
+.fi:focus{border-color:var(--blue);background:white;}
+.fi.admin-fi:focus{border-color:var(--red);}
+.f-hint{font-size:11px;color:var(--t3);margin-top:5px;}
+.f-forgot{text-align:right;font-size:12px;color:var(--blue);margin-top:5px;cursor:pointer;font-weight:500;}
+.f-divider{display:flex;align-items:center;gap:12px;margin:14px 0;color:var(--t3);font-size:12px;width:100%;}
+.f-divider::before,.f-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* SHARED BUTTON SYSTEM */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:10px;font-family:var(--font-b);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .18s;text-decoration:none;white-space:nowrap;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:hover{background:var(--blue-d);transform:translateY(-1px);}
+.btn-red{background:var(--red);color:white;}
+.btn-red:hover{background:var(--red-d);transform:translateY(-1px);}
+.btn-outline{background:white;color:var(--blue);border:1.5px solid var(--blue);}
+.btn-outline:hover{background:var(--blue-l);}
+.btn-ghost{background:transparent;color:var(--t2);border:1.5px solid var(--border);}
+.btn-ghost:hover{background:var(--bg);color:var(--t1);}
+.btn-green{background:var(--green);color:white;}
+.btn-green:hover{background:#1B5E20;}
+.btn-danger{background:var(--red);color:white;}
+.btn-disabled{background:var(--border);color:var(--t3);cursor:not-allowed;pointer-events:none;}
+.btn-sm{padding:6px 14px;font-size:12px;}
+.btn-xs{padding:4px 10px;font-size:11px;}
+
+/* SHARED LAYOUT */
+.app{display:flex;min-height:100vh;}
+.sidebar{width:var(--sb);background:white;border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100;top:0;left:0;}
+.sb-top{padding:18px 16px 14px;border-bottom:1px solid var(--border);}
+.sb-logo{display:flex;align-items:center;gap:10px;}
+.sb-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-h);font-weight:800;color:white;font-size:13px;flex-shrink:0;}
+.sb-name{font-family:var(--font-h);font-weight:700;font-size:14px;}
+.sb-sub{font-size:10px;color:var(--t3);}
+.sb-pill{margin-top:9px;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.05em;}
+.sb-nav{flex:1;padding:10px;overflow-y:auto;}
+.nav-sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);padding:12px 8px 5px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;color:var(--t2);margin-bottom:2px;transition:all .15s;text-decoration:none;}
+.nav-item:hover{background:var(--bg);color:var(--t1);}
+.ni{width:16px;height:16px;flex-shrink:0;opacity:.7;}
+.nav-item.active .ni{opacity:1;}
+.nb{margin-left:auto;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;color:white;}
+.sb-footer{padding:14px;border-top:1px solid var(--border);}
+.user-card{display:flex;align-items:center;gap:9px;}
+.user-av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;flex-shrink:0;}
+.user-name{font-size:13px;font-weight:600;}
+.user-role{font-size:10px;color:var(--t3);}
+.sign-out-btn{margin-left:auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t3);transition:all .15s;}
+.sign-out-btn:hover{background:var(--red-l);color:var(--red);border-color:var(--red);}
+.main{margin-left:var(--sb);flex:1;display:flex;flex-direction:column;}
+.topbar{background:white;border-bottom:1px solid var(--border);padding:0 26px;height:58px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:90;}
+.topbar-title{font-family:var(--font-h);font-weight:700;font-size:15px;}
+.tb-search{flex:1;max-width:300px;position:relative;}
+.tb-search input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:7px 12px 7px 34px;font-size:13px;font-family:var(--font-b);outline:none;transition:border .18s;}
+.tb-search input:focus{border-color:var(--blue);}
+.sico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--t3);}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.ib{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:all .15s;position:relative;}
+.ib:hover{background:var(--bg);}
+.ndot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;border:2px solid white;}
+.tb-av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;cursor:pointer;}
+.page{display:none;padding:26px;animation:fadeSlide .22s ease;}
+.page.active{display:block;}
+.card{background:white;border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh-xs);transition:transform .18s,box-shadow .18s;}
+.card:hover{box-shadow:var(--sh-sm);}
+.cp{padding:20px 22px;}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.ct{font-family:var(--font-h);font-size:14px;font-weight:700;}
+.see-all{font-size:12px;color:var(--blue);font-weight:600;cursor:pointer;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.bg-g{background:var(--green-l);color:var(--green);}
+.bg-r{background:var(--red-l);color:var(--red);}
+.bg-b{background:var(--blue-l);color:var(--blue);}
+.bg-y{background:var(--yellow-l);color:#B45309;}
+.bg-gr{background:var(--bg);color:var(--t2);}
+.bg-p{background:var(--purple-l);color:var(--purple);}
+.bg-t{background:var(--teal-l);color:var(--teal);}
+.dt{width:100%;border-collapse:collapse;}
+.dt th{background:var(--bg);padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);border-bottom:1px solid var(--border);}
+.dt td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.dt tr:last-child td{border:none;}
+.dt tr:hover td{background:var(--bg);}
+.nc{font-weight:600;}
+.prog{height:6px;background:var(--border);border-radius:20px;overflow:hidden;}
+.prog-f{height:100%;border-radius:20px;transition:width 1s ease;}
+.pill-tabs{display:flex;gap:4px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:18px;}
+.pt{flex:1;padding:8px;border-radius:8px;border:none;font-family:var(--font-b);font-size:12px;font-weight:600;cursor:pointer;color:var(--t2);background:transparent;transition:all .15s;}
+.pt.active{background:white;color:var(--t1);box-shadow:var(--sh-xs);}
+.fg2{margin-bottom:14px;}
+.fl2{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t2);margin-bottom:5px;}
+.fi2{width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid var(--border);font-family:var(--font-b);font-size:13px;outline:none;background:white;color:var(--t1);transition:border .15s;}
+.fi2:focus{border-color:var(--red);}
+.fs2{width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid var(--border);font-family:var(--font-b);font-size:13px;outline:none;background:white;color:var(--t1);cursor:pointer;}
+.fta{width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid var(--border);font-family:var(--font-b);font-size:13px;outline:none;background:white;resize:vertical;min-height:76px;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.fbar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
+.uz{border:2px dashed var(--border);border-radius:var(--r2);padding:28px;text-align:center;cursor:pointer;transition:all .18s;background:var(--bg);}
+.uz:hover,.uz.drag{border-color:var(--red);background:var(--red-l);}
+.cb{display:flex;flex-direction:column;gap:10px;}
+.cbr{display:flex;align-items:center;gap:10px;}
+.cbl{font-size:12px;color:var(--t2);min-width:110px;font-weight:500;}
+.cbt{flex:1;height:8px;background:var(--border);border-radius:20px;overflow:hidden;}
+.cbf{height:100%;border-radius:20px;transition:width 1.2s cubic-bezier(.22,.68,0,1.2);}
+.cbv{font-size:12px;font-weight:700;min-width:38px;text-align:right;}
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);}
+.mo.open{display:flex;}
+.modal{background:white;border-radius:var(--r4);max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg);animation:scaleIn .2s cubic-bezier(.34,1.4,.64,1);}
+.modal-lg{max-width:680px;}
+.mh{padding:20px 24px 0;display:flex;align-items:flex-start;justify-content:space-between;}
+.mt{font-family:var(--font-h);font-size:17px;font-weight:700;}
+.mc{width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--t2);flex-shrink:0;}
+.mc:hover{background:var(--red-l);color:var(--red);}
+.mb{padding:16px 24px 20px;}
+.mf{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+.apanel{display:none;}
+.apanel.active{display:block;}
+.bot-fab{position:fixed;bottom:24px;right:24px;z-index:300;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--yellow),#FF9800);box-shadow:0 4px 16px rgba(255,193,7,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;animation:breathe 3s ease-in-out infinite;transition:transform .2s;}
+.bot-fab:hover{transform:scale(1.1);animation:none;}
+.bot-panel{position:fixed;bottom:86px;right:24px;z-index:300;width:330px;background:white;border-radius:var(--r4);box-shadow:var(--sh-lg);display:none;flex-direction:column;max-height:460px;border:1px solid var(--border);animation:slideUp .2s cubic-bezier(.34,1.4,.64,1);}
+.bot-panel.open{display:flex;}
+.bh{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.bav{width:34px;height:34px;background:linear-gradient(135deg,var(--yellow),#FF9800);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;}
+.bmsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;}
+.bmsg{max-width:88%;font-size:13px;line-height:1.5;}
+.bmsg.b{align-self:flex-start;background:var(--bg);border-radius:0 12px 12px 12px;padding:9px 12px;}
+.bmsg.u{align-self:flex-end;background:var(--red);color:white;border-radius:12px 12px 0 12px;padding:9px 12px;}
+.bqp{padding:8px 12px;display:flex;flex-wrap:wrap;gap:5px;border-top:1px solid var(--border);}
+.qp{background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 9px;font-size:11px;font-weight:500;cursor:pointer;transition:all .14s;}
+.qp:hover{background:var(--red-l);border-color:var(--red);color:var(--red);}
+.bir{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;}
+.binput{flex:1;padding:7px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-family:var(--font-b);outline:none;}
+.binput:focus{border-color:var(--red);}
+.bsend{width:30px;height:30px;border-radius:50%;background:var(--red);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.confetti-wrap{position:fixed;inset:0;pointer-events:none;z-index:999;}
+.confetto{position:absolute;width:8px;height:8px;border-radius:2px;animation:fall 2s forwards;}
+
+/* ── MEMBER-SPECIFIC ── */
+.m-welcome-card{background:linear-gradient(135deg,#1565C0,#0D47A1 40%,#1A237E);border-radius:var(--r3);padding:22px 26px;color:white;display:flex;align-items:center;gap:18px;margin-bottom:22px;position:relative;overflow:hidden;}
+.m-welcome-card::before{content:'';position:absolute;right:-20px;top:-40px;width:190px;height:190px;background:rgba(255,255,255,.05);border-radius:50%;}
+.m-wt h2{font-family:var(--font-h);font-size:21px;font-weight:700;}
+.m-wt p{font-size:13px;opacity:.8;margin-top:4px;}
+.m-wdate{font-size:11px;opacity:.55;margin-top:7px;}
+.m-ws{display:flex;gap:14px;margin-left:auto;}
+.m-wstat .num{font-family:var(--font-h);font-size:24px;font-weight:800;}
+.m-wstat .lbl{font-size:10px;opacity:.65;text-transform:uppercase;letter-spacing:.05em;}
+.m-bot-bubble{background:rgba(255,255,255,.14);border-radius:var(--r2);padding:11px 15px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .18s;backdrop-filter:blur(8px);flex-shrink:0;}
+.m-bot-bubble:hover{background:rgba(255,255,255,.25);}
+.m-bot-av{width:30px;height:30px;background:var(--yellow);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.m-ag{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px;}
+.m-al{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:11px;display:flex;align-items:center;gap:6px;}
+.m-al .dot{width:6px;height:6px;border-radius:50%;}
+.m-dw{display:flex;align-items:center;gap:14px;}
+.m-di h3{font-family:var(--font-h);font-size:25px;font-weight:800;}
+.m-di p{font-size:12px;color:var(--t2);}
+.m-di .warn{color:var(--red);font-weight:600;font-size:11px;margin-top:3px;}
+.rank-item{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);}
+.rank-item:last-child{border:none;}
+.rnum{width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.r1{background:#FFF8E1;color:#B45309;}.r2{background:var(--blue-l);color:var(--blue);}.r3{background:#F3E5F5;color:var(--purple);}
+.ri h4{font-size:13px;font-weight:600;}.ri p{font-size:11px;color:var(--t3);}
+.rs{margin-left:auto;font-size:12px;font-weight:700;color:var(--blue);}
+.m-pm{display:flex;flex-direction:column;gap:7px;margin-top:3px;}
+.m-mr{display:flex;align-items:center;gap:8px;}
+.m-md{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.md-done{background:var(--green);}.md-active{background:var(--yellow);border:2px solid #B45309;}.md-lock{background:var(--border);border:2px solid var(--t3);}
+.m-ml{font-size:12px;}.m-mp{margin-left:auto;font-size:11px;font-weight:600;color:var(--t3);}
+.m-sg{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:22px;}
+.m-uh{background:linear-gradient(135deg,var(--red-l),#FFF0F0);border:1px solid #FFCDD2;border-radius:var(--r2);padding:14px;margin-bottom:11px;}
+.stag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 10px;border-radius:20px;margin-bottom:7px;}
+.t-live{background:var(--red-l);color:var(--red);}
+.t-up{background:var(--blue-l);color:var(--blue);}
+.m-stitle{font-family:var(--font-h);font-size:15px;font-weight:700;margin-bottom:5px;}
+.m-smeta{display:flex;gap:12px;font-size:12px;color:var(--t2);margin-bottom:9px;}
+.cdb{display:flex;gap:7px;margin:9px 0;}
+.cdu{text-align:center;background:white;border:1px solid var(--border);border-radius:8px;padding:5px 9px;min-width:42px;}
+.cdn{font-family:var(--font-h);font-size:17px;font-weight:800;color:var(--red);line-height:1;}
+.cdl{font-size:9px;text-transform:uppercase;color:var(--t3);font-weight:600;}
+.m-sm{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);}
+.m-sm:last-child{border:none;}
+.m-smd{width:8px;height:8px;border-radius:50%;background:var(--blue-l);border:2px solid var(--blue);margin-top:4px;flex-shrink:0;}
+.m-smt{font-size:13px;font-weight:600;}.m-smm{font-size:11px;color:var(--t3);margin-top:2px;}
+.rec-scroll{display:flex;gap:11px;overflow-x:auto;padding-bottom:4px;}
+.rec-scroll::-webkit-scrollbar{height:3px;}
+.rec-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:20px;}
+.rec-card{min-width:175px;background:white;border:1px solid var(--border);border-radius:var(--r2);padding:13px;flex-shrink:0;cursor:pointer;transition:transform .18s,box-shadow .18s;}
+.rec-card:hover{transform:translateY(-3px);box-shadow:var(--sh-sm);}
+.rat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;padding:2px 8px;border-radius:20px;display:inline-block;}
+.rtitle{font-size:13px;font-weight:600;margin-bottom:5px;line-height:1.4;}
+.rmeta{font-size:11px;color:var(--t3);display:flex;justify-content:space-between;}
+.dfbar{display:flex;gap:2px;margin-top:5px;}
+.dfd{width:6px;height:6px;border-radius:50%;background:var(--border);}
+.dfd.on{background:var(--yellow);}
+.m-sr{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:22px;}
+.m-st{padding:15px 18px;}
+.m-snum{font-family:var(--font-h);font-size:25px;font-weight:800;}
+.m-slbl{font-size:12px;color:var(--t2);margin-top:2px;}
+/* Career */
+.m-ch{display:flex;align-items:flex-start;gap:18px;margin-bottom:22px;}
+.m-mb{text-align:center;background:linear-gradient(135deg,var(--blue-l),#BBDEFB);border:2px solid var(--blue);border-radius:var(--r3);padding:18px 24px;flex-shrink:0;}
+.m-mlv{font-family:var(--font-h);font-size:26px;font-weight:800;color:var(--blue);}
+.m-mst{font-size:12px;color:var(--t2);margin-top:3px;}
+.m-leg{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;}
+.m-li{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);}
+.m-ld{width:12px;height:12px;border-radius:50%;}
+.ld-done{background:var(--green);}
+.ld-act{background:var(--yellow);border:2px solid #B45309;}
+.ld-lock{background:#E0E0E0;border:2px solid #9E9E9E;}
+.m-tf{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;}
+.fchip{padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--border);background:white;cursor:pointer;transition:all .18s;}
+.fchip.active{background:var(--blue);color:white;border-color:var(--blue);}
+/* Attendance */
+.m-hitem{display:flex;align-items:center;gap:11px;padding:13px 15px;background:white;border:1px solid var(--border);border-radius:var(--r2);transition:box-shadow .18s;}
+.m-hitem:hover{box-shadow:var(--sh-xs);}
+.m-hst{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.hs-done{background:var(--green-l);color:var(--green);}
+.hs-miss{background:var(--red-l);color:var(--red);}
+.m-hi h4{font-size:14px;font-weight:600;}.m-hi p{font-size:12px;color:var(--t3);margin-top:2px;}
+.m-ha{margin-left:auto;display:flex;gap:5px;align-items:center;}
+.miss-b{font-size:10px;background:var(--red-l);color:var(--red);padding:3px 8px;border-radius:20px;font-weight:600;}
+/* Certs */
+.m-cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
+.m-cc{cursor:pointer;}
+.m-cthumb{height:125px;border-radius:var(--r2) var(--r2) 0 0;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.m-cthi{text-align:center;padding:14px;}
+.m-ctit{font-family:var(--font-h);font-weight:700;font-size:12px;color:white;line-height:1.3;}
+.m-cbody{padding:11px 13px;}
+.m-cbody h4{font-size:13px;font-weight:600;}
+.m-cbody p{font-size:11px;color:var(--t3);margin-top:3px;}
+.vbadge{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--green);font-weight:600;margin-top:5px;}
+.m-cdov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);}
+.m-cdov.open{display:flex;}
+.m-cdp{background:white;border-radius:var(--r4);max-width:660px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg);animation:scaleIn .22s cubic-bezier(.34,1.4,.64,1);}
+.m-cprev{height:270px;display:flex;align-items:center;justify-content:center;border-radius:var(--r4) var(--r4) 0 0;position:relative;}
+.m-cpinner{text-align:center;}
+.m-cptit{font-family:var(--font-h);font-size:21px;font-weight:800;color:white;}
+.m-cpname{font-size:15px;color:rgba(255,255,255,.85);margin-top:7px;}
+.m-cqr{width:55px;height:55px;background:white;border-radius:8px;margin:11px auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--t3);}
+/* Profile */
+/* Admin-specific */
+.a-sb-pill{background:var(--red-l);color:var(--red);}
+.a-nav-active{background:var(--red-l)!important;color:var(--red)!important;}
+.a-tb-focus:focus{border-color:var(--red)!important;}
+.a-hero{background:linear-gradient(145deg,#0D1B2A,#1A237E 45%,#B71C1C);}
+.a-stat{font-size:28px;font-weight:800;font-family:var(--font-h);}
+.csv-res{background:var(--green-l);border:1px solid #A5D6A7;border-radius:var(--r2);padding:13px 15px;margin-top:13px;display:none;}
+.csv-res.show{display:block;}
+.cert-mini{height:98px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .18s;overflow:hidden;}
+.cert-mini:hover{transform:translateY(-3px);}
+.cmi{text-align:center;color:white;}
+.cmit{font-family:var(--font-h);font-size:11px;font-weight:700;line-height:1.3;}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     SHARED LOGIN PAGE
+══════════════════════════════════════════ -->
+<div id="login-page" class="login-shell">
+  <div class="login-hero">
+    <div class="lh-content">
+      <div class="lh-logo">GC</div>
+      <div class="lh-title">Game<span>Changer</span></div>
+      <div class="lh-sub">HR Calabarzon's unified platform for members, admins, and executives.</div>
+      <div class="lh-stats">
+        <div class="lh-stat"><div class="n">17k+</div><div class="l">Members</div></div>
+        <div class="lh-stat"><div class="n">5</div><div class="l">Provinces</div></div>
+        <div class="lh-stat"><div class="n">7</div><div class="l">HR Tracks</div></div>
+      </div>
+      <div class="lh-badges">
+        <div class="lh-badge">👤 Member Portal</div>
+        <div class="lh-badge">🛡 Admin Panel</div>
+        <div class="lh-badge">📊 AI Analytics</div>
+        <div class="lh-badge">🏆 Certificates</div>
+      </div>
+    </div>
+  </div>
+  <div class="lf-side">
+    <div class="lf-logo">
+      <div class="lf-logo-icon">GC</div>
+      <div><div class="lf-logo-name">GameChanger</div><div class="lf-logo-sub">HR Calabarzon</div></div>
+    </div>
+    <div class="role-toggle">
+      <button class="role-btn active rb-member" id="rb-member" onclick="setRole('member')">👤 Member</button>
+      <button class="role-btn rb-admin" id="rb-admin" onclick="setRole('admin')">🛡 Admin</button>
+    </div>
+    <div class="lf-title" id="lf-title">Welcome back 👋</div>
+    <div class="lf-sub" id="lf-sub">Sign in to your member account</div>
+    <div class="fg"><label class="fl">Email / Phone</label><input class="fi" type="email" placeholder="email@example.com" id="l-email" value="maria@hrcalabarzon.ph"></div>
+    <div class="fg"><label class="fl">Password</label><input class="fi" type="password" placeholder="••••••••" id="l-pass" value="password123"><div class="f-forgot">Forgot password?</div></div>
+    <div class="fg" id="admin-code-grp" style="display:none;">
+      <label class="fl">Admin Access Code</label>
+      <input class="fi admin-fi" type="text" placeholder="Enter admin code" id="l-code" value="HRC-ADM-2025">
+      <div class="f-hint">Contact system owner if you need an access code.</div>
+    </div>
+    <button id="login-btn" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:14px;" onclick="doLogin()">Sign In →</button>
+    <div id="login-err" style="display:none;color:var(--red);font-size:12px;margin-top:7px;text-align:center;"></div>
+    <div class="f-divider">or</div>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center;gap:8px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#0077B5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+      Continue with LinkedIn
+    </button>
+    <div style="text-align:center;font-size:13px;color:var(--t2);margin-top:14px;" id="login-switch-link">
+      Don't have an account? <a style="color:var(--red);font-weight:600;cursor:pointer;" onclick="alert('Join HR Calabarzon Community!')">Join Community</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MEMBER DASHBOARD
+══════════════════════════════════════════ -->
+<div id="member-app" class="app" style="display:none;">
+  <nav class="sidebar">
+    <div class="sb-top">
+      <div class="sb-logo">
+        <div class="sb-icon" style="background:linear-gradient(135deg,var(--red),var(--blue));">GC</div>
+        <div><div class="sb-name">GameChanger</div><div class="sb-sub">HR Calabarzon</div></div>
+      </div>
+      <div class="sb-pill" style="background:var(--blue-l);color:var(--blue);">👤 Member Portal</div>
+    </div>
+    <div class="sb-nav">
+      <div class="nav-sec">Menu</div>
+      <a class="nav-item active" onclick="mShowPage('home')" id="mn-home"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Home</a>
+      <a class="nav-item" onclick="mShowPage('career')" id="mn-career"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>Career Path</a>
+      <a class="nav-item" onclick="mShowPage('attendance')" id="mn-attendance"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Attendance & Sessions</a>
+      <a class="nav-item" onclick="mShowPage('certificates')" id="mn-certificates"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>Certificates</a>
+      <div class="nav-sec">Account</div>
+      <a class="nav-item" onclick="mShowPage('profile')" id="mn-profile"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>My Profile</a>
+      <a class="nav-item" onclick="alert('Settings — notifications, privacy, preferences')"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Settings</a>
+    </div>
+    <div class="sb-footer">
+      <div class="user-card">
+        <div class="user-av" style="background:linear-gradient(135deg,var(--red),var(--blue));">MS</div>
+        <div><div class="user-name">Maria Santos</div><div class="user-role">HRC-2024-0847</div></div>
+        <button class="sign-out-btn" onclick="switchToLogin()" title="Sign out"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></button>
+      </div>
+    </div>
+  </nav>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-title" id="m-page-title">Dashboard</div>
+      <div class="tb-search"><span class="sico"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.35-4.35"/></svg></span><input placeholder="Search sessions, topics..."></div>
+      <div class="tb-right">
+        <div class="ib" onclick="toggleBot()"><div class="ndot" style="background:var(--yellow);"></div><span style="font-size:15px;">🤖</span></div>
+        <div class="ib" onclick="alert('Notifications: 3 session reminders, 1 certificate ready!')"><div class="ndot" style="background:var(--red);"></div><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" d="M15 17H9v1a3 3 0 006 0v-1zm-9 0a9 9 0 0118 0"/></svg></div>
+        <div class="tb-av" style="background:linear-gradient(135deg,var(--red),var(--blue));" onclick="mShowPage('profile')">MS</div>
+      </div>
+    </header>
+
+    <!-- HOME -->
+    <div id="mp-home" class="page active">
+      <div class="m-welcome-card">
+        <div class="m-wt"><h2>Hi, Maria! 👋</h2><p>Ready to take the next step in your HR journey today?</p><div class="m-wdate" id="m-today"></div></div>
+        <div class="m-bot-bubble" onclick="toggleBot()"><div class="m-bot-av">🤖</div><div style="font-size:12px;"><strong style="display:block;">GameBot</strong>How can I help?</div></div>
+        <div class="m-ws">
+          <div class="m-wstat"><div class="num">17k+</div><div class="lbl">Members</div></div>
+          <div class="m-wstat"><div class="num">72%</div><div class="lbl">Attendance</div></div>
+          <div class="m-wstat"><div class="num">4</div><div class="lbl">Certs</div></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><div style="font-family:var(--font-h);font-size:14px;font-weight:700;">📊 Analytics Overview</div></div>
+      <div class="m-ag">
+        <div class="card" style="cursor:pointer;" onclick="alert('Full rankings by province → Analytics page')">
+          <div class="cp">
+            <div class="m-al"><div class="dot" style="background:var(--blue);"></div>Ranking by Area · Calabarzon</div>
+            <div class="rank-item"><div class="rnum r1">1</div><div class="ri"><h4>Cavite</h4><p>Recruitment</p></div><div class="rs">⭐ #1</div></div>
+            <div class="rank-item"><div class="rnum r2">2</div><div class="ri"><h4>Laguna</h4><p>Comp & Ben</p></div><div class="rs">🥈 #2</div></div>
+            <div class="rank-item"><div class="rnum r3">3</div><div class="ri"><h4>Batangas</h4><p>L&D</p></div><div class="rs">🥉 #3</div></div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;" onclick="mShowPage('attendance')">
+          <div class="cp">
+            <div class="m-al"><div class="dot" style="background:var(--red);"></div>Attendance Progress</div>
+            <div class="m-dw">
+              <svg width="88" height="88" viewBox="0 0 88 88"><circle cx="44" cy="44" r="34" fill="none" stroke="#F1F5F9" stroke-width="10"/><circle cx="44" cy="44" r="34" fill="none" stroke="var(--red)" stroke-width="10" stroke-dasharray="213" stroke-dashoffset="60" stroke-linecap="round" transform="rotate(-90 44 44)"/><text x="44" y="44" text-anchor="middle" dominant-baseline="central" font-family="'Plus Jakarta Sans'" font-size="15" font-weight="800" fill="#0F172A">72%</text></svg>
+              <div class="m-di"><h3>72%</h3><p>Overall attendance</p><p style="font-size:11px;color:var(--t3);margin-top:3px;">Goal: 80%</p><div class="warn">⚠ 2 sessions needed</div></div>
+            </div>
+            <div class="prog" style="margin-top:11px;"><div class="prog-f" style="width:72%;background:var(--red);"></div></div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;" onclick="mShowPage('career')">
+          <div class="cp">
+            <div class="m-al"><div class="dot" style="background:var(--yellow);"></div>Career Path Progress</div>
+            <div style="display:flex;align-items:center;gap:11px;margin-bottom:11px;"><div style="background:var(--blue-l);color:var(--blue);border-radius:var(--r2);padding:7px 11px;font-family:var(--font-h);font-weight:700;font-size:12px;">ENTRY</div><div style="font-size:12px;color:var(--t2);">3 of 7 tracks active</div></div>
+            <div class="m-pm">
+              <div class="m-mr"><div class="m-md md-done"></div><div class="m-ml">Recruitment Basics</div><div class="m-mp">✓</div></div>
+              <div class="m-mr"><div class="m-md md-active" style="animation:pulse 1.8s ease-in-out infinite;"></div><div class="m-ml">Digital HR Tools</div><div class="m-mp">72%</div></div>
+              <div class="m-mr"><div class="m-md md-lock"></div><div class="m-ml">Advanced Analytics</div><div class="m-mp">🔒</div></div>
+            </div>
+            <div class="prog" style="margin-top:11px;"><div class="prog-f" style="width:35%;background:linear-gradient(90deg,var(--blue),var(--red));"></div></div>
+            <div style="font-size:11px;color:var(--t3);margin-top:5px;">35% toward Mid level</div>
+          </div>
+        </div>
+      </div>
+      <div class="m-sg">
+        <div class="card cp">
+          <div class="ch" style="margin-bottom:11px;"><div class="ct">📅 Upcoming Sessions</div><span class="see-all" onclick="mShowPage('attendance')">View all</span></div>
+          <div class="m-uh">
+            <div class="stag t-up">🕒 Next Up</div>
+            <div class="m-stitle">Advanced HR Analytics Workshop</div>
+            <div class="m-smeta"><span>📋 HRIS</span><span>👤 Dr. Ana Reyes</span></div>
+            <div style="font-size:12px;color:var(--t2);margin-bottom:5px;">Starts in:</div>
+            <div class="cdb">
+              <div class="cdu"><div class="cdn" id="m-hh">02</div><div class="cdl">Hrs</div></div>
+              <div class="cdu"><div class="cdn" id="m-hm">34</div><div class="cdl">Min</div></div>
+              <div class="cdu"><div class="cdn" id="m-hs">15</div><div class="cdl">Sec</div></div>
+            </div>
+            <button class="btn btn-disabled btn-sm" id="m-join-home" onclick="openMo('m-join-modal')">Join Now (Soon)</button>
+          </div>
+          <div class="m-sm"><div class="m-smd"></div><div><div class="m-smt">Building Resilience in HR Teams</div><div class="m-smm">Jun 18 · 2:00 PM · Workshop</div></div></div>
+          <div class="m-sm"><div class="m-smd"></div><div><div class="m-smt">Navigating AI Ethics in HR</div><div class="m-smm">Jun 22 · 3:30 PM · Webinar</div></div></div>
+        </div>
+        <div class="card cp">
+          <div class="ch" style="margin-bottom:11px;"><div class="ct">🤖 Recommended by Bot</div><span style="font-size:10px;background:var(--yellow-l);color:#B45309;padding:3px 8px;border-radius:20px;font-weight:700;">AI Picks</span></div>
+          <div class="rec-scroll">
+            <div class="rec-card"><div class="rat" style="background:var(--blue-l);color:var(--blue);">Recruitment</div><div class="rtitle">Digital Interviewing Best Practices</div><div class="rmeta"><span>90 min</span><span>Webinar</span></div><div class="dfbar"><div class="dfd on"></div><div class="dfd on"></div><div class="dfd"></div></div></div>
+            <div class="rec-card"><div class="rat" style="background:var(--red-l);color:var(--red);">Compliance</div><div class="rtitle">DOLE Compliance 2024 Updates</div><div class="rmeta"><span>60 min</span><span>Seminar</span></div><div class="dfbar"><div class="dfd on"></div><div class="dfd"></div><div class="dfd"></div></div></div>
+            <div class="rec-card"><div class="rat" style="background:var(--green-l);color:var(--green);">L&D</div><div class="rtitle">Learning Needs Assessment</div><div class="rmeta"><span>120 min</span><span>Workshop</span></div><div class="dfbar"><div class="dfd on"></div><div class="dfd on"></div><div class="dfd on"></div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="m-sr">
+        <div class="card m-st"><div class="m-snum" style="color:var(--blue);">18</div><div class="m-slbl">Sessions Attended</div></div>
+        <div class="card m-st"><div class="m-snum" style="color:var(--yellow);">🏅 Entry</div><div class="m-slbl">Mastery Level</div></div>
+        <div class="card m-st"><div class="m-snum" style="color:var(--green);">4</div><div class="m-slbl">Certificates Earned</div></div>
+        <div class="card m-st"><div class="m-snum" style="color:var(--red);">#12</div><div class="m-slbl">Cavite Ranking</div></div>
+      </div>
+    </div>
+
+    <!-- CAREER PATH -->
+    <div id="mp-career" class="page">
+      <div class="m-ch">
+        <div class="m-mb"><div style="font-size:30px;">🏅</div><div class="m-mlv">ENTRY</div><div class="m-mst">HR Practitioner</div><div style="height:1px;background:var(--border);margin:11px 0;"></div><div style="font-size:11px;color:var(--t3);">Cavite · #12 Rank</div><button class="btn btn-outline btn-sm" style="margin-top:11px;font-size:11px;" onclick="mShowPage('profile')">View Profile</button></div>
+        <div style="flex:1;">
+          <div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:11px;">🗺 HR Mastery Skill Tree</div>
+          <div class="m-tf">
+            <div class="fchip active" onclick="this.closest('.m-tf').querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));this.classList.add('active')">All Areas</div>
+            <div class="fchip" onclick="this.closest('.m-tf').querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));this.classList.add('active')">Recruitment</div>
+            <div class="fchip" onclick="this.closest('.m-tf').querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));this.classList.add('active')">Compliance</div>
+            <div class="fchip" onclick="this.closest('.m-tf').querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));this.classList.add('active')">L&D</div>
+            <div class="fchip" onclick="this.closest('.m-tf').querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));this.classList.add('active')">HRIS</div>
+          </div>
+          <div class="m-leg">
+            <div class="m-li"><div class="m-ld ld-done"></div>Completed</div>
+            <div class="m-li"><div class="m-ld ld-act"></div>In Progress</div>
+            <div class="m-li"><div class="m-ld ld-lock"></div>Locked (≥80%)</div>
+            <div class="m-li"><div class="m-ld" style="background:#FFD700;border:2px solid #B45309;"></div>Milestone</div>
+          </div>
+          <div class="card" style="padding:18px;overflow:hidden;">
+            <svg width="100%" viewBox="0 0 660 460" style="overflow:visible;">
+              <circle cx="330" cy="230" r="40" fill="#1976D2" opacity=".13"/><circle cx="330" cy="230" r="28" fill="#1976D2" opacity=".22"/><circle cx="330" cy="230" r="20" fill="#1976D2"/>
+              <text x="330" y="226" text-anchor="middle" fill="white" font-family="'Plus Jakarta Sans'" font-size="8" font-weight="800">MASTERY</text><text x="330" y="237" text-anchor="middle" fill="white" font-family="'Plus Jakarta Sans'" font-size="7">HUB</text>
+              <line x1="330" y1="210" x2="330" y2="110" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3"/>
+              <line x1="330" y1="250" x2="330" y2="350" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3"/>
+              <line x1="312" y1="220" x2="165" y2="155" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3"/>
+              <line x1="348" y1="220" x2="495" y2="155" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3"/>
+              <line x1="312" y1="244" x2="165" y2="305" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3"/>
+              <line x1="348" y1="244" x2="495" y2="305" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3"/>
+              <line x1="310" y1="230" x2="75" y2="230" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3"/>
+              <!-- Completed: Recruitment -->
+              <g style="cursor:pointer;" onclick="openNodeMo('done','Recruitment Basics','Completed on Mar 15, 2024. Core recruitment strategies and talent acquisition fundamentals.','Mar 15, 2024')">
+                <circle cx="330" cy="86" r="26" fill="#2E7D32" opacity=".15"/><circle cx="330" cy="86" r="18" fill="#2E7D32"/>
+                <text x="330" y="82" text-anchor="middle" fill="white" font-size="8" font-weight="700" font-family="'Plus Jakarta Sans'">Recruitment</text><text x="330" y="92" text-anchor="middle" fill="white" font-size="8" font-family="'Plus Jakarta Sans'">Basics</text>
+                <text x="330" y="113" text-anchor="middle" fill="#2E7D32" font-size="9" font-weight="700" font-family="'Plus Jakarta Sans'">✓ Done</text>
+              </g>
+              <!-- Active: Compliance -->
+              <g style="cursor:pointer;" onclick="openNodeMo('active','Compliance & Labor Law','In progress. DOLE regulations, Philippine labor code basics. 72% complete.','—')">
+                <circle cx="145" cy="143" r="26" fill="#1976D2" opacity=".13"/><circle cx="145" cy="143" r="18" fill="#1976D2" opacity=".85" style="animation:pulse 1.8s ease-in-out infinite;"/>
+                <text x="145" y="139" text-anchor="middle" fill="white" font-size="8" font-weight="700" font-family="'Plus Jakarta Sans'">Compliance</text><text x="145" y="149" text-anchor="middle" fill="white" font-size="8" font-family="'Plus Jakarta Sans'">72% →</text>
+                <text x="145" y="168" text-anchor="middle" fill="#1976D2" font-size="9" font-weight="700" font-family="'Plus Jakarta Sans'">In Progress</text>
+              </g>
+              <!-- Locked nodes -->
+              <g style="cursor:pointer;" onclick="openNodeMo('locked','Compensation & Benefits','Locked. Complete Compliance track and reach 80% attendance to unlock.','—')">
+                <circle cx="515" cy="143" r="26" fill="#9E9E9E" opacity=".12"/><circle cx="515" cy="143" r="18" fill="#BDBDBD"/>
+                <text x="515" y="139" text-anchor="middle" fill="#757575" font-size="8" font-weight="700" font-family="'Plus Jakarta Sans'">Comp &</text><text x="515" y="149" text-anchor="middle" fill="#757575" font-size="8" font-family="'Plus Jakarta Sans'">Benefits</text>
+                <text x="515" y="166" text-anchor="middle" fill="#9E9E9E" font-size="12">🔒</text>
+              </g>
+              <g style="cursor:pointer;" onclick="openNodeMo('locked','L&D','Locked. Requires 80% attendance in Recruitment track.','—')">
+                <circle cx="55" cy="230" r="26" fill="#9E9E9E" opacity=".12"/><circle cx="55" cy="230" r="18" fill="#BDBDBD"/>
+                <text x="55" y="226" text-anchor="middle" fill="#757575" font-size="9" font-weight="700" font-family="'Plus Jakarta Sans'">L&amp;D</text>
+                <text x="55" y="247" text-anchor="middle" fill="#9E9E9E" font-size="12">🔒</text>
+              </g>
+              <g style="cursor:pointer;" onclick="openNodeMo('locked','Employee Relations','Locked. Pre-requisite: complete at least 2/3 compliance sessions.','—')">
+                <circle cx="145" cy="317" r="26" fill="#9E9E9E" opacity=".12"/><circle cx="145" cy="317" r="18" fill="#BDBDBD"/>
+                <text x="145" y="313" text-anchor="middle" fill="#757575" font-size="8" font-weight="700" font-family="'Plus Jakarta Sans'">Employee</text><text x="145" y="323" text-anchor="middle" fill="#757575" font-size="8" font-family="'Plus Jakarta Sans'">Relations</text>
+                <text x="145" y="340" text-anchor="middle" fill="#9E9E9E" font-size="12">🔒</text>
+              </g>
+              <g style="cursor:pointer;" onclick="openNodeMo('locked','HRIS & Digital Tools','Locked. Advanced HR Analytics session completion required.','—')">
+                <circle cx="515" cy="317" r="26" fill="#9E9E9E" opacity=".12"/><circle cx="515" cy="317" r="18" fill="#BDBDBD"/>
+                <text x="515" y="313" text-anchor="middle" fill="#757575" font-size="8" font-weight="700" font-family="'Plus Jakarta Sans'">HRIS &</text><text x="515" y="323" text-anchor="middle" fill="#757575" font-size="8" font-family="'Plus Jakarta Sans'">Digital</text>
+                <text x="515" y="340" text-anchor="middle" fill="#9E9E9E" font-size="12">🔒</text>
+              </g>
+              <g style="cursor:pointer;" onclick="openNodeMo('locked','Performance Management','Locked. Complete 2/3 pre-planned milestones to unlock.','—')">
+                <circle cx="330" cy="374" r="26" fill="#9E9E9E" opacity=".12"/><circle cx="330" cy="374" r="18" fill="#BDBDBD"/>
+                <text x="330" y="370" text-anchor="middle" fill="#757575" font-size="8" font-weight="700" font-family="'Plus Jakarta Sans'">Perf.</text><text x="330" y="380" text-anchor="middle" fill="#757575" font-size="8" font-family="'Plus Jakarta Sans'">Mgmt</text>
+                <text x="330" y="397" text-anchor="middle" fill="#9E9E9E" font-size="12">🔒</text>
+              </g>
+              <!-- Milestones -->
+              <line x1="330" y1="352" x2="255" y2="426" stroke="#FFD700" stroke-width="1.5" stroke-dasharray="3,2"/>
+              <circle cx="248" cy="432" r="7" fill="#FFD700" opacity=".85"/>
+              <text x="248" y="447" text-anchor="middle" fill="#B45309" font-size="8" font-family="'Plus Jakarta Sans'">Pre-planned</text>
+              <line x1="330" y1="352" x2="330" y2="436" stroke="#FFD700" stroke-width="1.5" stroke-dasharray="3,2"/>
+              <circle cx="330" cy="442" r="7" fill="#FFD700" opacity=".85"/>
+              <text x="330" y="457" text-anchor="middle" fill="#B45309" font-size="8" font-family="'Plus Jakarta Sans'">Milestone</text>
+              <!-- Bot -->
+              <g style="cursor:pointer;" onclick="toggleBot()">
+                <circle cx="606" cy="26" r="16" fill="#FFC107" opacity=".2"/><circle cx="606" cy="26" r="11" fill="#FFC107"/>
+                <text x="606" y="30" text-anchor="middle" font-size="11">🤖</text>
+              </g>
+              <text x="606" y="47" text-anchor="middle" fill="#B45309" font-size="8" font-weight="600" font-family="'Plus Jakarta Sans'">AI Bot</text>
+            </svg>
+            <div style="margin-top:11px;padding:11px 13px;background:var(--blue-l);border-radius:var(--r2);display:flex;align-items:center;gap:11px;">
+              <span style="font-size:12px;color:var(--blue);font-weight:600;">🎮 Simulate: Reach 80% Attendance</span>
+              <button class="btn btn-primary btn-sm" onclick="triggerConfetti();alert('🎉 You\'ve reached 80%!\nL&D node is now UNLOCKED!')">Unlock Next Node</button>
+              <button class="btn btn-outline btn-sm" onclick="triggerConfetti()">🎉 Celebrate</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATTENDANCE -->
+    <div id="mp-attendance" class="page">
+      <div class="fbar">
+        <select class="fs2" style="width:auto;"><option>All Areas</option><option>Recruitment</option><option>Compliance</option><option>L&D</option><option>HRIS</option></select>
+        <input class="fi2" placeholder="Search sessions..." style="max-width:220px;">
+        <select class="fs2" style="width:auto;"><option>Any Date</option><option>This Month</option><option>Last 30 Days</option></select>
+        <button class="btn btn-ghost btn-sm" onclick="alert('Exporting attendance history...')">⬇ Export</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+        <div class="card cp" style="border-left:4px solid var(--red);">
+          <div class="stag t-up">📅 Next Session</div>
+          <div class="m-stitle">Advanced HR Analytics Workshop</div>
+          <div class="m-smeta"><span>👤 Dr. Ana Reyes</span><span>📋 HRIS</span></div>
+          <div style="font-size:12px;color:var(--t2);margin-bottom:5px;">📆 Jun 15, 2025 · 2:00 PM · 90 min</div>
+          <div class="cdb">
+            <div class="cdu"><div class="cdn" id="m-ah">02</div><div class="cdl">Hrs</div></div>
+            <div class="cdu"><div class="cdn" id="m-am">34</div><div class="cdl">Min</div></div>
+            <div class="cdu"><div class="cdn" id="m-as">15</div><div class="cdl">Sec</div></div>
+          </div>
+          <button class="btn btn-disabled" id="m-join-att" onclick="openMo('m-join-modal')" style="margin-top:9px;">Join Now (opens when live)</button>
+        </div>
+        <div class="card cp">
+          <div class="ch" style="margin-bottom:11px;"><div class="ct">🤖 Recommended</div><span style="font-size:10px;background:var(--yellow-l);color:#B45309;padding:3px 8px;border-radius:20px;font-weight:700;">Based on Bot</span></div>
+          <div class="rec-scroll">
+            <div class="rec-card"><div class="rat" style="background:var(--blue-l);color:var(--blue);">Recruitment</div><div class="rtitle">Digital Interviewing</div><button class="btn btn-outline btn-sm" style="margin-top:7px;font-size:11px;" onclick="alert('Registered!')">+ Register</button></div>
+            <div class="rec-card"><div class="rat" style="background:var(--green-l);color:var(--green);">L&D</div><div class="rtitle">Training ROI Models</div><button class="btn btn-outline btn-sm" style="margin-top:7px;font-size:11px;" onclick="alert('Registered!')">+ Register</button></div>
+            <div class="rec-card"><div class="rat" style="background:var(--orange-l);color:var(--orange);">Performance</div><div class="rtitle">OKR Framework</div><button class="btn btn-outline btn-sm" style="margin-top:7px;font-size:11px;" onclick="alert('Registered!')">+ Register</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="ch"><div style="font-family:var(--font-h);font-size:14px;font-weight:700;">📋 Attendance History</div><button class="btn btn-ghost btn-sm" onclick="alert('Exporting...')">⬇ Export All</button></div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+        <div class="m-hitem"><div class="m-hst hs-done">✓</div><div class="m-hi"><h4>Digital Onboarding for HR Practitioners</h4><p>Apr 2, 2025 · Recruitment · 90 min · 100%</p></div><div class="m-ha"><button class="btn btn-outline btn-sm" onclick="mShowPage('certificates')">View Cert</button></div></div>
+        <div class="m-hitem"><div class="m-hst hs-done">✓</div><div class="m-hi"><h4>Advanced Interviewing Techniques</h4><p>Mar 28, 2025 · Recruitment · 60 min · 95%</p></div><div class="m-ha"><button class="btn btn-green btn-sm" onclick="mShowPage('certificates')">Claim Cert</button></div></div>
+        <div class="m-hitem"><div class="m-hst hs-miss">✕</div><div class="m-hi"><h4>Leadership in Non-Profit HR</h4><p>Mar 15, 2025 · Employee Relations · 60 min</p></div><div class="m-ha"><span class="miss-b">Below 80% Threshold</span></div></div>
+        <div class="m-hitem"><div class="m-hst hs-done">✓</div><div class="m-hi"><h4>DOLE Compliance Workshop 2025</h4><p>Mar 10, 2025 · Compliance · 120 min · 88%</p></div><div class="m-ha"><button class="btn btn-outline btn-sm" onclick="mShowPage('certificates')">View Cert</button></div></div>
+        <div class="m-hitem"><div class="m-hst hs-miss">✕</div><div class="m-hi"><h4>Compensation Benchmarking for SMEs</h4><p>Feb 10, 2025 · Comp & Benefits · 60 min</p></div><div class="m-ha"><span class="miss-b">Below 80% Threshold</span></div></div>
+      </div>
+    </div>
+
+    <!-- CERTIFICATES -->
+    <div id="mp-certificates" class="page">
+      <div class="fbar">
+        <select class="fs2" style="width:auto;"><option>All Years</option><option>2025</option><option>2024</option></select>
+        <select class="fs2" style="width:auto;"><option>All Accreditations</option><option>PHRCI</option><option>TESDA</option><option>DOLE</option></select>
+        <input class="fi2" placeholder="Search certificates..." style="max-width:200px;">
+      </div>
+      <div class="m-cg">
+        <div class="card m-cc" onclick="openMCert(0)"><div class="m-cthumb" style="background:linear-gradient(135deg,#1565C0,#0D47A1);"><div class="m-cthi"><div style="font-size:26px;margin-bottom:5px;">🏆</div><div class="m-ctit">Digital Onboarding for HR Practitioners</div></div></div><div class="m-cbody"><h4>Digital Onboarding</h4><p>Apr 2, 2025 · PHRCI</p><div class="vbadge">✅ Verified</div></div></div>
+        <div class="card m-cc" onclick="openMCert(1)"><div class="m-cthumb" style="background:linear-gradient(135deg,#B71C1C,#E53935);"><div class="m-cthi"><div style="font-size:26px;margin-bottom:5px;">🏅</div><div class="m-ctit">DOLE Compliance Workshop 2025</div></div></div><div class="m-cbody"><h4>DOLE Compliance</h4><p>Mar 10, 2025 · DOLE</p><div class="vbadge">✅ Verified</div></div></div>
+        <div class="card m-cc" onclick="openMCert(2)"><div class="m-cthumb" style="background:linear-gradient(135deg,#1B5E20,#2E7D32);"><div class="m-cthi"><div style="font-size:26px;margin-bottom:5px;">🎓</div><div class="m-ctit">HR Tech Tools Demo Day</div></div></div><div class="m-cbody"><h4>HR Tech Tools</h4><p>Feb 22, 2025 · TESDA</p><div class="vbadge">✅ Verified</div></div></div>
+        <div class="card m-cc" onclick="openMCert(3)"><div class="m-cthumb" style="background:linear-gradient(135deg,#4A148C,#6A1B9A);"><div class="m-cthi"><div style="font-size:26px;margin-bottom:5px;">⭐</div><div class="m-ctit">Recruitment Basics Mastery 2024</div></div></div><div class="m-cbody"><h4>Recruitment Mastery</h4><p>Dec 5, 2024 · PHRCI</p><div class="vbadge">✅ Verified</div></div></div>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div id="mp-profile" class="page">
+      <div style="display:grid;grid-template-columns:270px 1fr;gap:18px;">
+        <div class="card cp" style="text-align:center;">
+          <div style="width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--blue));display:flex;align-items:center;justify-content:center;margin:0 auto 11px;font-size:26px;font-weight:800;color:white;">MS</div>
+          <div style="font-family:var(--font-h);font-size:17px;font-weight:700;">Maria Santos</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:3px;">HRC-2024-0847</div>
+          <div style="background:var(--blue-l);color:var(--blue);border-radius:20px;padding:4px 14px;display:inline-block;font-size:12px;font-weight:700;margin-top:7px;">Entry Level</div>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+            <div style="font-size:12px;color:var(--t3);margin-bottom:5px;">Attendance Rate</div>
+            <div style="font-family:var(--font-h);font-size:22px;font-weight:800;color:var(--red);">72%</div>
+            <div class="prog"><div class="prog-f" style="width:72%;background:var(--red);"></div></div>
+            <div style="font-size:11px;color:var(--t3);margin-top:3px;">Target: 80%</div>
+          </div>
+          <div style="margin-top:11px;display:flex;justify-content:space-around;padding-top:11px;border-top:1px solid var(--border);">
+            <div style="text-align:center;"><div style="font-weight:700;font-size:15px;">18</div><div style="font-size:10px;color:var(--t3);">Sessions</div></div>
+            <div style="text-align:center;"><div style="font-weight:700;font-size:15px;">4</div><div style="font-size:10px;color:var(--t3);">Certs</div></div>
+            <div style="text-align:center;"><div style="font-weight:700;font-size:15px;">#12</div><div style="font-size:10px;color:var(--t3);">Rank</div></div>
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:14px;justify-content:center;" onclick="alert('Edit profile — update avatar, summary, preferences')">✏ Edit Profile</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="card cp">
+            <div class="ct" style="margin-bottom:14px;">Personal Information</div>
+            <div class="g2">
+              <div><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase;margin-bottom:3px;">Full Name</div><div style="font-weight:600;">Maria Cristina Santos</div></div>
+              <div><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase;margin-bottom:3px;">Email</div><div style="font-weight:600;">maria@hrcalabarzon.ph</div></div>
+              <div><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase;margin-bottom:3px;">Province</div><div style="font-weight:600;">Cavite</div></div>
+              <div><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase;margin-bottom:3px;">Organization</div><div style="font-weight:600;">MSME HR Solutions, Inc.</div></div>
+            </div>
+          </div>
+          <div class="card cp">
+            <div class="ct" style="margin-bottom:11px;">Areas of Expertise</div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;">
+              <span style="background:var(--blue-l);color:var(--blue);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;">Recruitment</span>
+              <span style="background:var(--red-l);color:var(--red);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;">Compliance</span>
+              <span style="background:var(--yellow-l);color:#B45309;padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;">L&D</span>
+              <span style="background:var(--green-l);color:var(--green);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;">HRIS</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /member main -->
+</div><!-- /member app -->
+
+<!-- MEMBER MODALS -->
+<div class="mo" id="m-node-modal">
+  <div class="modal"><div class="mh"><div style="display:flex;gap:10px;align-items:center;"><span id="m-ni-icon" style="font-size:22px;"></span><div class="mt" id="m-ni-title"></div></div><button class="mc" onclick="closeMo('m-node-modal')">✕</button></div>
+  <div class="mb"><div id="m-ni-body" style="font-size:14px;color:var(--t2);line-height:1.6;"></div><div id="m-ni-prog" style="margin-top:14px;"></div><div style="display:flex;gap:8px;margin-top:18px;"><button class="btn btn-primary btn-sm" id="m-ni-btn">View Details</button><button class="btn btn-ghost btn-sm" onclick="closeMo('m-node-modal')">Close</button></div></div></div>
+</div>
+<div class="mo" id="m-join-modal">
+  <div class="modal"><div class="mh"><div class="mt">🎯 Join Session</div><button class="mc" onclick="closeMo('m-join-modal')">✕</button></div>
+  <div class="mb"><p style="font-size:14px;color:var(--t2);line-height:1.6;">You're joining: <strong>Advanced HR Analytics Workshop</strong> with Dr. Ana Reyes<br><br>📅 Jun 15, 2025 · 2:00 PM · 90 min<br><br>Your attendance will be recorded automatically.</p></div>
+  <div class="mf"><button class="btn btn-primary" onclick="alert('Joining session!');closeMo('m-join-modal')">🚀 Join Now</button><button class="btn btn-ghost" onclick="closeMo('m-join-modal')">Cancel</button></div></div>
+</div>
+<!-- Member cert detail overlay -->
+<div class="m-cdov" id="m-cert-detail">
+  <div class="m-cdp">
+    <div class="m-cprev" id="m-cd-prev"><div class="m-cpinner"><div style="font-size:36px;margin-bottom:7px;" id="m-cd-seal">🏆</div><div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.1em;">Certificate of Completion</div><div class="m-cptit" id="m-cd-title">Title</div><div class="m-cpname">This certifies that</div><div style="font-size:18px;font-weight:800;color:white;margin-top:3px;">Maria Cristina Santos</div><div class="m-cqr">QR</div><div style="font-size:10px;color:rgba(255,255,255,.55);">Scan to verify</div></div></div>
+    <div style="padding:14px 22px;"><span style="background:var(--green-l);color:var(--green);font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">✅ Verified</span></div>
+    <div style="padding:0 22px 14px;display:flex;flex-direction:column;gap:9px;">
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:120px;">Certificate In</div><div style="font-size:13px;font-weight:600;" id="m-cd-meta">Title</div></div>
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:120px;">Issued To</div><div style="font-size:13px;font-weight:600;">Maria Cristina Santos</div></div>
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:120px;">Issue Date</div><div style="font-size:13px;font-weight:600;" id="m-cd-date">Date</div></div>
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:120px;">Accreditation</div><div style="font-size:13px;font-weight:600;" id="m-cd-acc">Acc</div></div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:9px;">
+      <button class="btn btn-primary" onclick="alert('📥 Downloading PDF...')">⬇ Download PDF</button>
+      <button class="btn btn-outline" onclick="alert('🔗 Sharing to LinkedIn...')">🔗 Share LinkedIn</button>
+      <button class="btn btn-ghost" style="margin-left:auto;" onclick="document.getElementById('m-cert-detail').classList.remove('open')">✕ Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     ADMIN DASHBOARD
+══════════════════════════════════════════ -->
+<div id="admin-app" class="app" style="display:none;">
+  <nav class="sidebar">
+    <div class="sb-top">
+      <div class="sb-logo">
+        <div class="sb-icon" style="background:linear-gradient(135deg,var(--red-d),var(--red));">GC</div>
+        <div><div class="sb-name">GameChanger</div><div class="sb-sub">HR Calabarzon</div></div>
+      </div>
+      <div class="sb-pill a-sb-pill">🛡 Admin Panel</div>
+    </div>
+    <div class="sb-nav">
+      <div class="nav-sec">Overview</div>
+      <a class="nav-item active" onclick="aShowPage('home')" id="an-home"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Dashboard</a>
+      <a class="nav-item" onclick="aShowPage('analytics')" id="an-analytics"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>AI Analytics</a>
+      <div class="nav-sec">Management</div>
+      <a class="nav-item" onclick="aShowPage('members')" id="an-members"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Data Management<span class="nb" style="background:var(--red);">17k</span></a>
+      <a class="nav-item" onclick="aShowPage('sessions')" id="an-sessions"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Session Creation</a>
+      <a class="nav-item" onclick="aShowPage('attendance')" id="an-attendance"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>Attendance Mgmt<span class="nb" style="background:var(--red);">3</span></a>
+      <a class="nav-item" onclick="aShowPage('payments')" id="an-payments"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>Payment Management</a>
+      <div class="nav-sec">Account</div>
+      <a class="nav-item" onclick="alert('Admin settings — permissions, API keys, notifications')"><svg class="ni" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Settings</a>
+    </div>
+    <div class="sb-footer">
+      <div class="user-card">
+        <div class="user-av" style="background:linear-gradient(135deg,var(--red-d),var(--red));">JD</div>
+        <div><div class="user-name">Juan Dela Cruz</div><div class="user-role">Super Admin</div></div>
+        <button class="sign-out-btn" onclick="switchToLogin()" title="Sign out"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></button>
+      </div>
+    </div>
+  </nav>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-title" id="a-page-title">Admin Dashboard</div>
+      <div class="tb-search"><span class="sico"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.35-4.35"/></svg></span><input placeholder="Search members, sessions..."></div>
+      <div class="tb-right">
+        <div class="ib" onclick="toggleBot()"><div class="ndot" style="background:var(--yellow);"></div><span style="font-size:15px;">🤖</span></div>
+        <div class="ib" onclick="alert('3 pending CSVs · 2 payment reviews · 1 submission awaiting')"><div class="ndot" style="background:var(--red);"></div><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" d="M15 17H9v1a3 3 0 006 0v-1zm-9 0a9 9 0 0118 0"/></svg></div>
+        <div class="tb-av" style="background:linear-gradient(135deg,var(--red-d),var(--red));">JD</div>
+      </div>
+    </header>
+
+    <!-- ADMIN HOME -->
+    <div id="ap-home" class="page active">
+      <div style="background:linear-gradient(135deg,#0D1B2A,#1A237E 50%,#B71C1C);border-radius:var(--r4);padding:22px 26px;color:white;display:flex;align-items:center;gap:18px;margin-bottom:20px;position:relative;overflow:hidden;">
+        <div style="position:absolute;right:-30px;top:-30px;width:150px;height:150px;background:rgba(255,255,255,.04);border-radius:50%;"></div>
+        <div style="flex:1;">
+          <div style="font-family:var(--font-h);font-size:19px;font-weight:700;">Good morning, Juan! 👋</div>
+          <div style="font-size:13px;opacity:.7;margin-top:3px;" id="a-date"></div>
+          <div style="display:flex;gap:11px;margin-top:13px;">
+            <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 15px;cursor:pointer;" onclick="aShowPage('attendance')"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em;">Pending CSV</div><div style="font-family:var(--font-h);font-size:20px;font-weight:800;">3</div></div>
+            <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 15px;cursor:pointer;" onclick="aShowPage('payments')"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em;">Pending Payments</div><div style="font-family:var(--font-h);font-size:20px;font-weight:800;">8</div></div>
+            <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 15px;cursor:pointer;" onclick="openMo('a-create-session')"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em;">Active Sessions</div><div style="font-family:var(--font-h);font-size:20px;font-weight:800;">2</div></div>
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;"><div style="font-size:11px;opacity:.6;">Total Members</div><div style="font-family:var(--font-h);font-size:34px;font-weight:800;">17,284</div><div style="font-size:11px;opacity:.6;">↑ 124 this month</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:20px;">
+        <div class="card cp" style="cursor:pointer;" onclick="aShowPage('sessions')"><div style="position:absolute;right:14px;top:14px;width:34px;height:34px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:17px;">📅</div><div style="font-family:var(--font-h);font-size:26px;font-weight:800;color:var(--blue);">24</div><div style="font-size:12px;color:var(--t2);margin-top:4px;">Sessions This Year</div><div style="font-size:11px;font-weight:600;color:var(--green);margin-top:7px;">↑ 4 vs last month</div></div>
+        <div class="card cp" style="cursor:pointer;" onclick="aShowPage('attendance')"><div style="position:absolute;right:14px;top:14px;width:34px;height:34px;border-radius:10px;background:var(--green-l);display:flex;align-items:center;justify-content:center;font-size:17px;">🏆</div><div style="font-family:var(--font-h);font-size:26px;font-weight:800;color:var(--green);">1,842</div><div style="font-size:12px;color:var(--t2);margin-top:4px;">Certificates Issued</div><div style="font-size:11px;font-weight:600;color:var(--green);margin-top:7px;">↑ 312 this month</div></div>
+        <div class="card cp" style="cursor:pointer;" onclick="aShowPage('payments')"><div style="position:absolute;right:14px;top:14px;width:34px;height:34px;border-radius:10px;background:var(--yellow-l);display:flex;align-items:center;justify-content:center;font-size:17px;">💳</div><div style="font-family:var(--font-h);font-size:22px;font-weight:800;color:var(--orange);">₱186,400</div><div style="font-size:12px;color:var(--t2);margin-top:4px;">Payments Collected</div><div style="font-size:11px;font-weight:600;color:var(--green);margin-top:7px;">↑ ₱24,000 this month</div></div>
+        <div class="card cp" style="cursor:pointer;" onclick="aShowPage('analytics')"><div style="position:absolute;right:14px;top:14px;width:34px;height:34px;border-radius:10px;background:var(--red-l);display:flex;align-items:center;justify-content:center;font-size:17px;">📊</div><div style="font-family:var(--font-h);font-size:26px;font-weight:800;color:var(--red);">78%</div><div style="font-size:12px;color:var(--t2);margin-top:4px;">Avg. Attendance</div><div style="font-size:11px;font-weight:600;color:var(--red);margin-top:7px;">↓ 2% vs last month</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;">
+        <div class="card cp">
+          <div class="ch"><div class="ct">Recent Sessions</div><button class="btn btn-sm btn-red" onclick="openMo('a-create-session')">+ New Session</button></div>
+          <table class="dt"><thead><tr><th>Session</th><th>Date</th><th>Area</th><th>Attendees</th><th>Status</th></tr></thead><tbody>
+            <tr><td class="nc">Advanced HR Analytics Workshop</td><td>Jun 15</td><td><span class="badge bg-b">HRIS</span></td><td>142/180</td><td><span class="badge bg-g">✓ Done</span></td></tr>
+            <tr><td class="nc">DOLE Compliance Refresher</td><td>Jun 10</td><td><span class="badge bg-r">Compliance</span></td><td>98/120</td><td><span class="badge bg-y">CSV Pending</span></td></tr>
+            <tr><td class="nc">Digital Onboarding Masterclass</td><td>Jun 5</td><td><span class="badge bg-t">Recruitment</span></td><td>215/250</td><td><span class="badge bg-g">✓ Done</span></td></tr>
+          </tbody></table>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:13px;">
+          <div class="card cp">
+            <div class="ct" style="margin-bottom:11px;">Quick Actions</div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <button class="btn btn-red" style="justify-content:flex-start;gap:10px;" onclick="openMo('a-create-session')">📅 Create New Session</button>
+              <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;" onclick="aShowPage('attendance')">📋 Upload Zoom CSV</button>
+              <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;" onclick="aShowPage('members')">👥 Member Database</button>
+              <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;" onclick="aShowPage('analytics')">📊 Open Analytics</button>
+            </div>
+          </div>
+          <div class="card cp">
+            <div class="ch" style="margin-bottom:9px;"><div class="ct">Recent Payments</div><span class="see-all" onclick="aShowPage('payments')">View all</span></div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <div style="display:flex;align-items:center;gap:9px;font-size:13px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--blue);">MS</div><div style="flex:1;"><div style="font-weight:600;">Maria Santos</div><div style="font-size:11px;color:var(--t3);">DOLE Compliance</div></div><span class="badge bg-g">✓ Paid</span></div>
+              <div style="display:flex;align-items:center;gap:9px;font-size:13px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--yellow-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#B45309;">JP</div><div style="flex:1;"><div style="font-weight:600;">Jose Padilla</div><div style="font-size:11px;color:var(--t3);">HR Analytics</div></div><span class="badge bg-y">Pending</span></div>
+              <div style="display:flex;align-items:center;gap:9px;font-size:13px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--red-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--red);">AL</div><div style="flex:1;"><div style="font-weight:600;">Ana Lim</div><div style="font-size:11px;color:var(--t3);">Digital Onboarding</div></div><span class="badge bg-g">✓ Paid</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN ANALYTICS -->
+    <div id="ap-analytics" class="page">
+      <div class="g3" style="margin-bottom:20px;">
+        <div class="card cp"><div class="ct" style="margin-bottom:13px;">📍 Attendance by Province</div><div class="cb">
+          <div class="cbr"><div class="cbl">Cavite</div><div class="cbt"><div class="cbf" style="width:85%;background:var(--red);"></div></div><div class="cbv" style="color:var(--red);">85%</div></div>
+          <div class="cbr"><div class="cbl">Laguna</div><div class="cbt"><div class="cbf" style="width:78%;background:var(--blue);"></div></div><div class="cbv" style="color:var(--blue);">78%</div></div>
+          <div class="cbr"><div class="cbl">Batangas</div><div class="cbt"><div class="cbf" style="width:72%;background:var(--green);"></div></div><div class="cbv" style="color:var(--green);">72%</div></div>
+          <div class="cbr"><div class="cbl">Rizal</div><div class="cbt"><div class="cbf" style="width:65%;background:var(--purple);"></div></div><div class="cbv" style="color:var(--purple);">65%</div></div>
+          <div class="cbr"><div class="cbl">Quezon</div><div class="cbt"><div class="cbf" style="width:58%;background:var(--teal);"></div></div><div class="cbv" style="color:var(--teal);">58%</div></div>
+        </div></div>
+        <div class="card cp"><div class="ct" style="margin-bottom:13px;">🎯 Top Areas of Expertise</div><div class="cb">
+          <div class="cbr"><div class="cbl">Recruitment</div><div class="cbt"><div class="cbf" style="width:92%;background:var(--teal);"></div></div><div class="cbv" style="color:var(--teal);">92%</div></div>
+          <div class="cbr"><div class="cbl">Compliance</div><div class="cbt"><div class="cbf" style="width:84%;background:var(--blue);"></div></div><div class="cbv" style="color:var(--blue);">84%</div></div>
+          <div class="cbr"><div class="cbl">L&D</div><div class="cbt"><div class="cbf" style="width:76%;background:var(--green);"></div></div><div class="cbv" style="color:var(--green);">76%</div></div>
+          <div class="cbr"><div class="cbl">HRIS</div><div class="cbt"><div class="cbf" style="width:68%;background:var(--purple);"></div></div><div class="cbv" style="color:var(--purple);">68%</div></div>
+          <div class="cbr"><div class="cbl">Perf. Mgmt</div><div class="cbt"><div class="cbf" style="width:54%;background:var(--orange);"></div></div><div class="cbv" style="color:var(--orange);">54%</div></div>
+        </div></div>
+        <div class="card cp"><div class="ct" style="margin-bottom:13px;">📜 Certificate Distribution</div>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <svg width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="34" fill="none" stroke="#F1F5F9" stroke-width="11"/><circle cx="48" cy="48" r="34" fill="none" stroke="var(--green)" stroke-width="11" stroke-dasharray="134 80" stroke-linecap="round" transform="rotate(-90 48 48)"/><circle cx="48" cy="48" r="34" fill="none" stroke="var(--blue)" stroke-width="11" stroke-dasharray="48 166" stroke-linecap="round" transform="rotate(12 48 48)"/><circle cx="48" cy="48" r="34" fill="none" stroke="var(--yellow)" stroke-width="11" stroke-dasharray="30 184" stroke-linecap="round" transform="rotate(98 48 48)"/><text x="48" y="44" text-anchor="middle" font-family="'Plus Jakarta Sans'" font-size="11" font-weight="800" fill="#0F172A">1,842</text><text x="48" y="57" text-anchor="middle" font-family="'DM Sans'" font-size="7" fill="#94A3B8">issued</text></svg>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px;"><div style="width:9px;height:9px;border-radius:50%;background:var(--green);flex-shrink:0;"></div><div><div style="font-weight:600;">Issued</div><div style="font-size:11px;color:var(--t3);">1,240 · 67%</div></div></div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px;"><div style="width:9px;height:9px;border-radius:50%;background:var(--blue);flex-shrink:0;"></div><div><div style="font-weight:600;">Pending</div><div style="font-size:11px;color:var(--t3);">402 · 22%</div></div></div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px;"><div style="width:9px;height:9px;border-radius:50%;background:var(--yellow);flex-shrink:0;"></div><div><div style="font-weight:600;">Failed</div><div style="font-size:11px;color:var(--t3);">200 · 11%</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card cp" style="margin-bottom:14px;border-left:4px solid var(--yellow);">
+        <div style="display:flex;align-items:flex-start;gap:11px;"><div style="font-size:22px;">🤖</div><div><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:5px;">AI Insights — June 2025</div><div style="font-size:13px;color:var(--t2);line-height:1.7;">🔴 <strong>Recruitment sessions</strong> consistently attract the highest attendance (92%). Consider 2 additional sessions in Q3.<br>🔵 <strong>Cavite province</strong> leads participation. Engage Quezon (58%) with targeted outreach.<br>🟡 <strong>Certificate issuance dropped 4%</strong> — 3 pending CSV uploads. Action: upload DOLE Compliance report.</div><button class="btn btn-sm btn-ghost" style="margin-top:9px;" onclick="toggleBot()">Ask GameBot for details →</button></div></div>
+      </div>
+      <div class="card cp">
+        <div class="ch"><div class="ct">📈 Monthly Certification Trends</div><button class="btn btn-sm btn-ghost" onclick="alert('Generating monthly report...')">⬇ Export</button></div>
+        <table class="dt"><thead><tr><th>Month</th><th>Sessions</th><th>Attendees</th><th>Certs Issued</th><th>Revenue</th><th>Avg Attendance</th><th>AI Flag</th></tr></thead><tbody>
+          <tr><td>February</td><td>3</td><td>456</td><td>389</td><td>₱38,900</td><td><span class="badge bg-g">85%</span></td><td>🔥 High engagement</td></tr>
+          <tr><td>March</td><td>4</td><td>612</td><td>490</td><td>₱49,000</td><td><span class="badge bg-g">80%</span></td><td>—</td></tr>
+          <tr><td>April</td><td>3</td><td>398</td><td>302</td><td>₱30,200</td><td><span class="badge bg-y">75%</span></td><td>⚠ Below target</td></tr>
+          <tr><td>May</td><td>4</td><td>524</td><td>413</td><td>₱43,700</td><td><span class="badge bg-g">79%</span></td><td>—</td></tr>
+          <tr><td>June (MTD)</td><td>2</td><td>240</td><td>—</td><td>—</td><td><span class="badge bg-y">78%</span></td><td>⏳ CSV Pending</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+
+    <!-- ADMIN MEMBERS -->
+    <div id="ap-members" class="page">
+      <div class="fbar">
+        <input class="fi2" style="max-width:240px;" placeholder="Search name, ID, email...">
+        <select class="fs2" style="width:auto;"><option>All Provinces</option><option>Cavite</option><option>Laguna</option><option>Batangas</option><option>Rizal</option><option>Quezon</option></select>
+        <select class="fs2" style="width:auto;"><option>All Levels</option><option>Entry</option><option>Mid</option><option>Senior</option></select>
+        <button class="btn btn-ghost btn-sm" onclick="alert('Exporting member CSV...')">⬇ Export CSV</button>
+        <button class="btn btn-red btn-sm" onclick="alert('Add new member form')">+ Add Member</button>
+      </div>
+      <div class="card">
+        <table class="dt"><thead><tr><th>Member</th><th>ID</th><th>Province</th><th>Expertise</th><th>Level</th><th>Attendance</th><th>Certs</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+          <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:28px;height:28px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--blue);">MS</div><div class="nc">Maria Santos</div></div></td><td style="color:var(--t3);font-size:12px;">HRC-2024-0847</td><td>Cavite</td><td><span class="badge bg-t">Recruitment</span></td><td><span class="badge bg-y">Entry</span></td><td><div style="display:flex;align-items:center;gap:7px;"><div class="prog" style="width:55px;"><div class="prog-f" style="width:72%;background:var(--red);"></div></div><span style="font-size:12px;">72%</span></div></td><td>4</td><td><span class="badge bg-g">Active</span></td><td><button class="btn btn-xs btn-ghost" onclick="alert('View: Maria Santos')">View</button></td></tr>
+          <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:28px;height:28px;border-radius:50%;background:var(--green-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--green);">JP</div><div class="nc">Jose Padilla</div></div></td><td style="color:var(--t3);font-size:12px;">HRC-2024-0612</td><td>Laguna</td><td><span class="badge bg-b">Compliance</span></td><td><span class="badge bg-b">Mid</span></td><td><div style="display:flex;align-items:center;gap:7px;"><div class="prog" style="width:55px;"><div class="prog-f" style="width:88%;background:var(--green);"></div></div><span style="font-size:12px;">88%</span></div></td><td>9</td><td><span class="badge bg-g">Active</span></td><td><button class="btn btn-xs btn-ghost" onclick="alert('View: Jose Padilla')">View</button></td></tr>
+          <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:28px;height:28px;border-radius:50%;background:var(--red-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--red);">AL</div><div class="nc">Ana Lim</div></div></td><td style="color:var(--t3);font-size:12px;">HRC-2023-0204</td><td>Batangas</td><td><span class="badge bg-p">L&D</span></td><td><span class="badge bg-r">Senior</span></td><td><div style="display:flex;align-items:center;gap:7px;"><div class="prog" style="width:55px;"><div class="prog-f" style="width:95%;background:var(--green);"></div></div><span style="font-size:12px;">95%</span></div></td><td>18</td><td><span class="badge bg-g">Active</span></td><td><button class="btn btn-xs btn-ghost" onclick="alert('View: Ana Lim')">View</button></td></tr>
+          <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:28px;height:28px;border-radius:50%;background:var(--yellow-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#B45309;">RC</div><div class="nc">Rico Cruz</div></div></td><td style="color:var(--t3);font-size:12px;">HRC-2024-1102</td><td>Rizal</td><td><span class="badge bg-t">HRIS</span></td><td><span class="badge bg-y">Entry</span></td><td><div style="display:flex;align-items:center;gap:7px;"><div class="prog" style="width:55px;"><div class="prog-f" style="width:60%;background:var(--yellow);"></div></div><span style="font-size:12px;">60%</span></div></td><td>2</td><td><span class="badge bg-gr">Inactive</span></td><td><button class="btn btn-xs btn-ghost" onclick="alert('View: Rico Cruz')">View</button></td></tr>
+        </tbody></table>
+        <div style="padding:13px 15px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div style="font-size:12px;color:var(--t3);">Showing 4 of 17,284 members</div><div style="display:flex;gap:5px;"><button class="btn btn-xs btn-ghost">← Prev</button><button class="btn btn-xs btn-red">1</button><button class="btn btn-xs btn-ghost">Next →</button></div></div>
+      </div>
+    </div>
+
+    <!-- ADMIN SESSIONS -->
+    <div id="ap-sessions" class="page">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;"><button class="btn btn-red" onclick="openMo('a-create-session')">+ Create New Session</button></div>
+      <div class="pill-tabs">
+        <button class="pt active" onclick="aSwitchTab(this,'as-upcoming')">Upcoming (2)</button>
+        <button class="pt" onclick="aSwitchTab(this,'as-past')">Past Sessions (22)</button>
+        <button class="pt" onclick="aSwitchTab(this,'as-draft')">Drafts (1)</button>
+      </div>
+      <div id="as-upcoming" class="apanel active">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px;">
+          <div class="card cp" style="border-left:4px solid var(--red);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px;"><span class="badge bg-r">🔴 Live Soon</span><div style="display:flex;gap:5px;"><button class="btn btn-xs btn-ghost" onclick="openMo('a-edit-session')">✏ Edit</button><button class="btn btn-xs btn-danger" onclick="alert('Cancel session?')">Cancel</button></div></div><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:7px;">Advanced HR Analytics Workshop</div><div style="font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>📅 Jun 15, 2025 · 2:00 PM · 90 min</div><div>👤 Dr. Ana Reyes · HRIS</div><div>🔗 <span style="color:var(--blue);cursor:pointer;">zoom.us/j/82934810293</span></div><div>💳 ₱500 admission fee</div></div><div style="display:flex;gap:14px;margin-top:11px;"><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--blue);">142</div><div style="font-size:11px;color:var(--t3);">Registered</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--green);">138</div><div style="font-size:11px;color:var(--t3);">Paid</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--yellow);">4</div><div style="font-size:11px;color:var(--t3);">Pending Pay</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--red);">180</div><div style="font-size:11px;color:var(--t3);">Capacity</div></div></div><div class="prog" style="margin-top:7px;"><div class="prog-f" style="width:79%;background:var(--blue);"></div></div><div style="font-size:11px;color:var(--t3);margin-top:3px;">79% capacity</div></div>
+          <div class="card cp" style="border-left:4px solid var(--blue);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px;"><span class="badge bg-b">📅 Upcoming</span><div style="display:flex;gap:5px;"><button class="btn btn-xs btn-ghost" onclick="openMo('a-edit-session')">✏ Edit</button><button class="btn btn-xs btn-danger" onclick="alert('Cancel session?')">Cancel</button></div></div><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:7px;">Building Resilience in HR Teams</div><div style="font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>📅 Jun 18, 2025 · 3:00 PM · 60 min</div><div>👤 Mr. Ramon Torres · Employee Relations</div><div>🔗 <span style="color:var(--blue);cursor:pointer;">zoom.us/j/74839201038</span></div><div>💳 ₱300 admission fee</div></div><div style="display:flex;gap:14px;margin-top:11px;"><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--blue);">87</div><div style="font-size:11px;color:var(--t3);">Registered</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--green);">79</div><div style="font-size:11px;color:var(--t3);">Paid</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--yellow);">8</div><div style="font-size:11px;color:var(--t3);">Pending</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--red);">120</div><div style="font-size:11px;color:var(--t3);">Capacity</div></div></div></div>
+        </div>
+      </div>
+      <div id="as-past" class="apanel"><div class="card"><table class="dt"><thead><tr><th>Session</th><th>Date</th><th>Area</th><th>Attendees</th><th>Certs</th><th>Revenue</th><th>CSV</th><th>Actions</th></tr></thead><tbody>
+        <tr><td class="nc">Digital Onboarding Masterclass</td><td>Jun 5</td><td><span class="badge bg-t">Recruitment</span></td><td>215/250</td><td><span class="badge bg-g">215</span></td><td>₱53,750</td><td><span class="badge bg-g">✓ Done</span></td><td><button class="btn btn-xs btn-ghost" onclick="aShowPage('attendance')">View Certs</button></td></tr>
+        <tr><td class="nc">DOLE Compliance Refresher</td><td>Jun 10</td><td><span class="badge bg-r">Compliance</span></td><td>98/120</td><td><span class="badge bg-y">Pending</span></td><td>₱24,500</td><td><span class="badge bg-y">⏳ Pending</span></td><td><button class="btn btn-xs btn-red" onclick="aShowPage('attendance')">Upload CSV</button></td></tr>
+      </tbody></table></div></div>
+      <div id="as-draft" class="apanel"><div class="card cp" style="max-width:380px;border:2px dashed var(--border);"><span class="badge bg-gr" style="margin-bottom:9px;">Draft</span><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:5px;">HR Tech & AI Tools Showcase</div><div style="font-size:12px;color:var(--t3);margin-bottom:11px;">Created Jun 12</div><div style="display:flex;gap:7px;"><button class="btn btn-sm btn-red" onclick="openMo('a-edit-session')">Continue Editing</button><button class="btn btn-sm btn-danger" onclick="alert('Delete draft?')">Delete</button></div></div></div>
+    </div>
+
+    <!-- ADMIN ATTENDANCE -->
+    <div id="ap-attendance" class="page">
+      <div class="pill-tabs">
+        <button class="pt active" onclick="aSwitchTab(this,'at-upload')">📤 Upload CSV</button>
+        <button class="pt" onclick="aSwitchTab(this,'at-certs')">🏆 Certificates</button>
+        <button class="pt" onclick="aSwitchTab(this,'at-monitor')">📊 Distribution</button>
+      </div>
+      <div id="at-upload" class="apanel active">
+        <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;">
+          <div class="card cp">
+            <div class="ct" style="margin-bottom:4px;">Upload Zoom Attendance CSV</div>
+            <div style="font-size:12px;color:var(--t2);margin-bottom:14px;">Upload the Zoom attendance CSV to auto-generate certificates for members with ≥80% attendance.</div>
+            <div class="fg2"><div class="fl2">Select Session</div><select class="fs2" id="a-csv-session"><option>-- Select session --</option><option>DOLE Compliance Refresher · Jun 10 ⏳</option><option>Advanced HR Analytics · Jun 15</option></select></div>
+            <div class="uz" onclick="aSimUpload()" id="a-upload-zone"><div style="font-size:30px;margin-bottom:9px;">📂</div><div style="font-family:var(--font-h);font-weight:600;font-size:14px;margin-bottom:3px;">Click to upload or drag & drop</div><div style="font-size:12px;color:var(--t3);">Zoom CSV only · Max 10MB</div></div>
+            <div class="csv-res" id="a-csv-res">
+              <div style="font-family:var(--font-h);font-size:13px;font-weight:700;color:var(--green);margin-bottom:7px;">✅ CSV Parsed Successfully!</div>
+              <div style="font-size:13px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>👥 <strong>Records found:</strong> 98 attendees</div><div>✅ <strong>Qualified (≥80%):</strong> 78 members</div><div>❌ <strong>Below threshold:</strong> 20 members</div></div>
+              <div style="margin-top:11px;display:flex;gap:7px;"><button class="btn btn-green btn-sm" onclick="alert('🎉 Generating 78 certificates...\nMembers will be emailed automatically.')">Generate 78 Certificates</button><button class="btn btn-ghost btn-sm" onclick="document.getElementById('a-csv-res').classList.remove('show')">Cancel</button></div>
+            </div>
+          </div>
+          <div class="card cp">
+            <div class="ct" style="margin-bottom:13px;">Pending Uploads</div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <div style="padding:11px;background:var(--red-l);border-radius:var(--r2);border-left:3px solid var(--red);"><div style="font-weight:600;font-size:13px;margin-bottom:3px;">DOLE Compliance Refresher</div><div style="font-size:12px;color:var(--t2);">Jun 10 · 98 attendees · 5 days overdue</div><button class="btn btn-xs btn-red" style="margin-top:5px;" onclick="aSimUpload()">Upload Now</button></div>
+              <div style="padding:11px;background:var(--yellow-l);border-radius:var(--r2);border-left:3px solid var(--yellow);"><div style="font-weight:600;font-size:13px;margin-bottom:3px;">Advanced HR Analytics (upcoming)</div><div style="font-size:12px;color:var(--t2);">Jun 15 · Not yet held</div><span class="badge bg-y" style="margin-top:5px;">After session ends</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="at-certs" class="apanel">
+        <div class="fbar"><select class="fs2" style="width:auto;"><option>All Sessions</option><option>Digital Onboarding</option></select><button class="btn btn-ghost btn-sm" onclick="alert('Downloading all as ZIP...')">⬇ Download All (ZIP)</button><button class="btn btn-green btn-sm" onclick="alert('Bulk emailing certificates...')">📧 Bulk Send</button></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px;">
+          <div class="cert-mini" style="background:linear-gradient(135deg,#1565C0,#0D47A1);" onclick="openMo('a-cert-detail')"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">🏆</div><div class="cmit">Digital Onboarding</div><div style="font-size:10px;opacity:.7;margin-top:2px;">215 issued</div></div></div>
+          <div class="cert-mini" style="background:linear-gradient(135deg,#1B5E20,#2E7D32);" onclick="openMo('a-cert-detail')"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">🏅</div><div class="cmit">Comp Benchmarking</div><div style="font-size:10px;opacity:.7;margin-top:2px;">128 issued</div></div></div>
+          <div class="cert-mini" style="background:linear-gradient(135deg,#4A148C,#6A1B9A);" onclick="openMo('a-cert-detail')"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">🎓</div><div class="cmit">Recruitment Mastery</div><div style="font-size:10px;opacity:.7;margin-top:2px;">189 issued</div></div></div>
+          <div class="cert-mini" style="background:linear-gradient(135deg,#B71C1C,#E53935);" onclick="alert('DOLE Compliance — upload CSV first')"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">⏳</div><div class="cmit">DOLE Compliance</div><div style="font-size:10px;opacity:.7;margin-top:2px;">CSV Pending</div></div></div>
+        </div>
+        <div class="card"><table class="dt"><thead><tr><th>Member</th><th>Session</th><th>Attendance</th><th>Certificate</th><th>Email</th><th>Actions</th></tr></thead><tbody>
+          <tr><td class="nc">Maria Santos</td><td>Digital Onboarding</td><td><span class="badge bg-g">100%</span></td><td><span class="badge bg-g">✓ Issued</span></td><td><span class="badge bg-g">✓ Sent</span></td><td><div style="display:flex;gap:4px;"><button class="btn btn-xs btn-ghost" onclick="alert('Downloading PDF...')">⬇ PDF</button><button class="btn btn-xs btn-ghost" onclick="alert('Resending...')">📧 Resend</button></div></td></tr>
+          <tr><td class="nc">Rico Cruz</td><td>Digital Onboarding</td><td><span class="badge bg-r">68%</span></td><td><span class="badge bg-r">✗ Not Qualified</span></td><td>—</td><td><button class="btn btn-xs btn-ghost" onclick="alert('Override: Force issue certificate? This will be logged.')">Override</button></td></tr>
+        </tbody></table></div>
+      </div>
+      <div id="at-monitor" class="apanel">
+        <div class="g3" style="margin-bottom:14px;">
+          <div class="card cp" style="text-align:center;"><div style="font-size:26px;font-weight:800;font-family:var(--font-h);color:var(--green);">1,842</div><div style="font-size:12px;color:var(--t2);">Total Issued</div></div>
+          <div class="card cp" style="text-align:center;"><div style="font-size:26px;font-weight:800;font-family:var(--font-h);color:var(--yellow);">402</div><div style="font-size:12px;color:var(--t2);">Pending</div></div>
+          <div class="card cp" style="text-align:center;"><div style="font-size:26px;font-weight:800;font-family:var(--font-h);color:var(--red);">200</div><div style="font-size:12px;color:var(--t2);">Failed / Below Threshold</div></div>
+        </div>
+        <div class="card cp"><div class="ct" style="margin-bottom:13px;">Distribution by Session</div><div class="cb">
+          <div class="cbr"><div class="cbl">Digital Onboarding</div><div class="cbt"><div class="cbf" style="width:100%;background:var(--green);"></div></div><div class="cbv" style="color:var(--green);">215/215</div></div>
+          <div class="cbr"><div class="cbl">DOLE Compliance</div><div class="cbt"><div class="cbf" style="width:0%;background:var(--yellow);"></div></div><div class="cbv" style="color:var(--yellow);">CSV Pending</div></div>
+          <div class="cbr"><div class="cbl">Recruitment Mastery</div><div class="cbt"><div class="cbf" style="width:88%;background:var(--blue);"></div></div><div class="cbv" style="color:var(--blue);">189/215</div></div>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- ADMIN PAYMENTS -->
+    <div id="ap-payments" class="page">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px;">
+        <div class="card cp" style="text-align:center;"><div style="font-size:20px;font-weight:800;font-family:var(--font-h);color:var(--green);">₱186,400</div><div style="font-size:12px;color:var(--t2);">Total Collected</div></div>
+        <div class="card cp" style="text-align:center;"><div style="font-size:20px;font-weight:800;font-family:var(--font-h);color:var(--yellow);">₱3,600</div><div style="font-size:12px;color:var(--t2);">Pending (8)</div></div>
+        <div class="card cp" style="text-align:center;"><div style="font-size:20px;font-weight:800;font-family:var(--font-h);color:var(--blue);">1,864</div><div style="font-size:12px;color:var(--t2);">Transactions</div></div>
+        <div class="card cp" style="text-align:center;"><div style="font-size:20px;font-weight:800;font-family:var(--font-h);color:var(--purple);">12</div><div style="font-size:12px;color:var(--t2);">Waivers</div></div>
+      </div>
+      <div class="fbar"><select class="fs2" style="width:auto;"><option>All Sessions</option><option>Advanced HR Analytics</option><option>DOLE Compliance</option></select><select class="fs2" style="width:auto;"><option>All Status</option><option>Paid</option><option>Pending</option><option>Waived</option></select><input class="fi2" placeholder="Search member..." style="max-width:180px;"><button class="btn btn-ghost btn-sm" onclick="alert('Exporting Excel...')">⬇ Export</button></div>
+      <div class="card"><table class="dt"><thead><tr><th>Member</th><th>Session</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--blue);">MS</div><div class="nc">Maria Santos</div></div></td><td>DOLE Compliance</td><td style="font-weight:700;">₱500</td><td>GCash</td><td>Jun 12</td><td><span class="badge bg-g">✓ Paid</span></td><td><button class="btn btn-xs btn-ghost" onclick="alert('Receipt: REF-2025-06-0847')">Receipt</button></td></tr>
+        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--yellow-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#B45309;">JP</div><div class="nc">Jose Padilla</div></div></td><td>HR Analytics</td><td style="font-weight:700;">₱500</td><td>—</td><td>—</td><td><span class="badge bg-y">⏳ Pending</span></td><td><div style="display:flex;gap:4px;"><button class="btn btn-xs btn-green" onclick="alert('Mark Jose Padilla as PAID')">✓ Paid</button><button class="btn btn-xs btn-ghost" onclick="alert('Grant waiver?')">Waive</button></div></td></tr>
+        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--green-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--green);">RC</div><div class="nc">Rico Cruz</div></div></td><td>Digital Onboarding</td><td style="font-weight:700;">₱0</td><td>—</td><td>—</td><td><span class="badge bg-p">🎁 Waived</span></td><td><button class="btn btn-xs btn-ghost" onclick="alert('Waiver: MSME scholarship grant')">View Reason</button></td></tr>
+      </tbody></table></div>
+    </div>
+
+  </div><!-- /admin main -->
+</div><!-- /admin app -->
+
+<!-- ADMIN MODALS -->
+<div class="mo" id="a-create-session">
+  <div class="modal modal-lg"><div class="mh"><div class="mt">📅 Create New Session</div><button class="mc" onclick="closeMo('a-create-session')">✕</button></div>
+  <div class="mb"><div class="g2">
+    <div class="fg2" style="grid-column:1/-1;"><div class="fl2">Session Title</div><input class="fi2" placeholder="e.g. Advanced HR Analytics Workshop"></div>
+    <div class="fg2"><div class="fl2">Area of Expertise</div><select class="fs2"><option>Recruitment</option><option>Compliance</option><option>L&D</option><option>HRIS</option><option>Performance Mgmt</option></select></div>
+    <div class="fg2"><div class="fl2">Session Type</div><select class="fs2"><option>Webinar</option><option>Workshop</option><option>Seminar</option></select></div>
+    <div class="fg2"><div class="fl2">Speaker Name</div><input class="fi2" placeholder="e.g. Dr. Ana Reyes"></div>
+    <div class="fg2"><div class="fl2">Speaker Title</div><input class="fi2" placeholder="e.g. HR Analytics Specialist"></div>
+    <div class="fg2"><div class="fl2">Date</div><input class="fi2" type="date"></div>
+    <div class="fg2"><div class="fl2">Time</div><input class="fi2" type="time" value="14:00"></div>
+    <div class="fg2"><div class="fl2">Duration (min)</div><input class="fi2" type="number" value="90"></div>
+    <div class="fg2"><div class="fl2">Capacity</div><input class="fi2" type="number" value="200"></div>
+    <div class="fg2" style="grid-column:1/-1;"><div class="fl2">Zoom / Meeting Link</div><input class="fi2" placeholder="https://zoom.us/j/..."></div>
+    <div class="fg2"><div class="fl2">Admission Fee (₱)</div><input class="fi2" type="number" value="500" min="0"><div style="font-size:11px;color:var(--t3);margin-top:3px;">0 = free session</div></div>
+    <div class="fg2"><div class="fl2">Accreditation Body</div><input class="fi2" placeholder="e.g. PHRCI, TESDA, DOLE"></div>
+    <div class="fg2" style="grid-column:1/-1;"><div class="fl2">Description</div><textarea class="fta" placeholder="Session description and learning outcomes..."></textarea></div>
+  </div></div>
+  <div class="mf"><button class="btn btn-ghost" onclick="closeMo('a-create-session')">Save as Draft</button><button class="btn btn-red" onclick="alert('Session published! Members can now see it.');closeMo('a-create-session')">Publish Session</button></div></div>
+</div>
+<div class="mo" id="a-edit-session">
+  <div class="modal modal-lg"><div class="mh"><div class="mt">✏ Edit Session</div><button class="mc" onclick="closeMo('a-edit-session')">✕</button></div>
+  <div class="mb"><div class="g2">
+    <div class="fg2" style="grid-column:1/-1;"><div class="fl2">Session Title</div><input class="fi2" value="Advanced HR Analytics Workshop"></div>
+    <div class="fg2"><div class="fl2">Date</div><input class="fi2" type="date" value="2025-06-15"></div>
+    <div class="fg2"><div class="fl2">Time</div><input class="fi2" type="time" value="14:00"></div>
+    <div class="fg2" style="grid-column:1/-1;"><div class="fl2">Zoom Link</div><input class="fi2" value="https://zoom.us/j/82934810293"></div>
+    <div class="fg2"><div class="fl2">Admission Fee (₱)</div><input class="fi2" type="number" value="500"></div>
+    <div class="fg2"><div class="fl2">Capacity</div><input class="fi2" type="number" value="180"></div>
+  </div>
+  <div style="background:var(--yellow-l);border-radius:var(--r2);padding:10px 13px;margin-top:4px;font-size:12px;color:#B45309;">⚠ 142 members are registered. Edits will trigger a notification email to all registrants.</div></div>
+  <div class="mf"><button class="btn btn-ghost" onclick="closeMo('a-edit-session')">Cancel</button><button class="btn btn-red" onclick="alert('Session updated. Members notified.');closeMo('a-edit-session')">Save Changes</button></div></div>
+</div>
+<div class="mo" id="a-cert-detail">
+  <div class="modal"><div class="mh"><div class="mt">🏆 Certificate Template</div><button class="mc" onclick="closeMo('a-cert-detail')">✕</button></div>
+  <div class="mb"><div style="height:185px;background:linear-gradient(135deg,#1565C0,#0D47A1);border-radius:var(--r3);display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;margin-bottom:13px;"><div style="font-size:30px;margin-bottom:7px;">🏆</div><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.1em;">Certificate of Completion</div><div style="font-family:var(--font-h);font-size:17px;font-weight:700;margin-top:5px;">Digital Onboarding for HR Practitioners</div><div style="font-size:12px;opacity:.75;margin-top:3px;">HR Calabarzon · PHRCI Accredited</div><div style="width:46px;height:46px;background:white;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#999;margin-top:9px;">QR</div></div><div style="display:flex;gap:9px;flex-wrap:wrap;font-size:12px;"><span><span style="color:var(--t3);">Issued:</span> 215 certificates</span><span><span style="color:var(--t3);">Session:</span> Jun 5, 2025</span><span><span style="color:var(--t3);">Accreditation:</span> PHRCI</span></div></div>
+  <div class="mf"><button class="btn btn-ghost" onclick="alert('Downloading ZIP...')">⬇ Download All</button><button class="btn btn-red" onclick="alert('Emailing 215 certificates...')">📧 Send to Members</button></div></div>
+</div>
+
+<!-- SHARED AI BOT -->
+<div class="bot-fab" onclick="toggleBot()" id="bot-fab">🤖</div>
+<div class="bot-panel" id="bot-panel">
+  <div class="bh">
+    <div class="bav">🤖</div>
+    <div><div style="font-weight:700;font-size:14px;">GameBot</div><div style="font-size:11px;color:var(--t3);" id="bot-role-label">AI Assistant</div></div>
+    <button onclick="toggleBot()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;">✕</button>
+  </div>
+  <div class="bmsgs" id="bot-msgs"><div class="bmsg b" id="bot-greeting">Hi! 👋 I'm GameBot. How can I help?</div></div>
+  <div class="bqp" id="bot-qp"></div>
+  <div class="bir">
+    <input class="binput" placeholder="Ask GameBot..." id="bot-in" onkeydown="if(event.key==='Enter')sendBot(this.value)">
+    <button class="bot-send" onclick="sendBot(document.getElementById('bot-in').value)"><svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+  </div>
+</div>
+
+<!-- SHARED CONFETTI -->
+<div id="confetti-wrap" style="position:fixed;inset:0;pointer-events:none;z-index:999;"></div>
+
+<script>
+// ════════════════════════════════
+// STATE
+// ════════════════════════════════
+let currentRole = 'member'; // 'member' | 'admin'
+let botOpen = false;
+let countdown = 2*3600 + 34*60 + 15;
+
+// ════════════════════════════════
+// LOGIN
+// ════════════════════════════════
+function setRole(role) {
+  currentRole = role;
+  document.getElementById('rb-member').className = 'role-btn' + (role==='member' ? ' active rb-member' : ' rb-member');
+  document.getElementById('rb-admin').className = 'role-btn' + (role==='admin' ? ' active rb-admin' : ' rb-admin');
+  document.getElementById('admin-code-grp').style.display = role==='admin' ? 'block' : 'none';
+  document.getElementById('lf-title').textContent = role==='admin' ? 'Admin Sign In 🛡' : 'Welcome back 👋';
+  document.getElementById('lf-sub').textContent = role==='admin' ? 'Access the HR Calabarzon admin panel' : 'Sign in to your member account';
+  const btn = document.getElementById('login-btn');
+  btn.textContent = role==='admin' ? 'Sign In to Admin Panel →' : 'Sign In →';
+  btn.className = 'btn ' + (role==='admin' ? 'btn-red' : 'btn-primary');
+  document.getElementById('login-switch-link').innerHTML = role==='admin'
+    ? 'Not an admin? <a style="color:var(--blue);font-weight:600;cursor:pointer;" onclick="setRole(\'member\')">Sign in as Member</a>'
+    : 'Don\'t have an account? <a style="color:var(--red);font-weight:600;cursor:pointer;" onclick="alert(\'Join HR Calabarzon Community!\')">Join Community</a>';
+}
+function doLogin() {
+  const e = document.getElementById('l-email').value;
+  const p = document.getElementById('l-pass').value;
+  if (!e||!p) { showLoginErr('Please fill in all fields.'); return; }
+  if (currentRole==='admin') {
+    if (!document.getElementById('l-code').value) { showLoginErr('Admin access code required.'); return; }
+  }
+  const btn = document.getElementById('login-btn');
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+  setTimeout(() => {
+    btn.textContent = currentRole==='admin' ? 'Sign In to Admin Panel →' : 'Sign In →';
+    btn.disabled = false;
+    document.getElementById('login-page').style.display = 'none';
+    if (currentRole === 'admin') {
+      document.getElementById('admin-app').style.display = 'flex';
+      document.getElementById('a-date').textContent = todayStr();
+      setupAdminBot();
+    } else {
+      document.getElementById('member-app').style.display = 'flex';
+      document.getElementById('m-today').textContent = todayStr();
+      setupMemberBot();
+      startCountdown();
+    }
+  }, 800);
+}
+function showLoginErr(msg) {
+  const el = document.getElementById('login-err');
+  el.textContent = msg; el.style.display = 'block';
+}
+function switchToLogin() {
+  document.getElementById('member-app').style.display = 'none';
+  document.getElementById('admin-app').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+  botOpen = false;
+  document.getElementById('bot-panel').classList.remove('open');
+}
+function todayStr() {
+  return new Date().toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+
+// ════════════════════════════════
+// MEMBER NAVIGATION
+// ════════════════════════════════
+function mShowPage(p) {
+  document.querySelectorAll('#member-app .page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('#member-app .nav-item').forEach(x=>x.classList.remove('active'));
+  document.getElementById('mp-'+p).classList.add('active');
+  const n=document.getElementById('mn-'+p); if(n) n.classList.add('active');
+  const t={home:'Dashboard',career:'Career Path',attendance:'Attendance & Sessions',certificates:'Certificates',profile:'My Profile'};
+  document.getElementById('m-page-title').textContent = t[p]||p;
+  window.scrollTo(0,0);
+}
+
+// ════════════════════════════════
+// ADMIN NAVIGATION
+// ════════════════════════════════
+function aShowPage(p) {
+  document.querySelectorAll('#admin-app .page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('#admin-app .nav-item').forEach(x=>x.classList.remove('active'));
+  document.getElementById('ap-'+p).classList.add('active');
+  const n=document.getElementById('an-'+p); if(n) n.classList.add('active');
+  const t={home:'Admin Dashboard',analytics:'AI Analytics',members:'Data Management',sessions:'Session Creation',attendance:'Attendance Management',payments:'Payment Management'};
+  document.getElementById('a-page-title').textContent = t[p]||p;
+  window.scrollTo(0,0);
+}
+function aSwitchTab(btn, panelId) {
+  btn.closest('.pill-tabs').querySelectorAll('.pt').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.apanel').forEach(p=>{
+    p.classList.toggle('active', p.id===panelId);
+  });
+}
+
+// ════════════════════════════════
+// MODALS
+// ════════════════════════════════
+function openMo(id){ document.getElementById(id).classList.add('open'); }
+function closeMo(id){ document.getElementById(id).classList.remove('open'); }
+document.addEventListener('click', e => {
+  if(e.target.classList.contains('mo')) e.target.classList.remove('open');
+  if(e.target.id==='m-cert-detail') e.target.classList.remove('open');
+});
+
+// ════════════════════════════════
+// MEMBER CERT DETAIL
+// ════════════════════════════════
+const certData=[
+  {title:'Digital Onboarding for HR Practitioners',date:'April 2, 2025',acc:'PHRCI Accredited',bg:'linear-gradient(135deg,#1565C0,#0D47A1)',seal:'🏆'},
+  {title:'DOLE Compliance Workshop 2025',date:'March 10, 2025',acc:'DOLE Accredited',bg:'linear-gradient(135deg,#B71C1C,#E53935)',seal:'🏅'},
+  {title:'HR Tech Tools Demo Day',date:'February 22, 2025',acc:'TESDA Recognized',bg:'linear-gradient(135deg,#1B5E20,#2E7D32)',seal:'🎓'},
+  {title:'Recruitment Basics Mastery 2024',date:'December 5, 2024',acc:'PHRCI Accredited',bg:'linear-gradient(135deg,#4A148C,#6A1B9A)',seal:'⭐'},
+];
+function openMCert(i) {
+  const c=certData[i];
+  document.getElementById('m-cd-prev').style.background=c.bg;
+  document.getElementById('m-cd-seal').textContent=c.seal;
+  document.getElementById('m-cd-title').textContent=c.title;
+  document.getElementById('m-cd-meta').textContent=c.title;
+  document.getElementById('m-cd-date').textContent=c.date;
+  document.getElementById('m-cd-acc').textContent=c.acc;
+  document.getElementById('m-cert-detail').classList.add('open');
+}
+
+// ════════════════════════════════
+// MEMBER NODE MODAL
+// ════════════════════════════════
+function openNodeMo(state, title, desc, date) {
+  const icons={done:'✅',active:'🟡',locked:'🔒'};
+  document.getElementById('m-ni-icon').textContent=icons[state];
+  document.getElementById('m-ni-title').textContent=title;
+  document.getElementById('m-ni-body').textContent=desc;
+  const btn=document.getElementById('m-ni-btn');
+  const prog=document.getElementById('m-ni-prog');
+  if(state==='locked'){
+    prog.innerHTML='<div class="prog"><div class="prog-f" style="width:72%;background:var(--red);"></div></div><div style="font-size:12px;color:var(--t3);margin-top:5px;">72% · Need 80% to unlock</div>';
+    btn.textContent='Find Sessions to Unlock';
+    btn.onclick=()=>{closeMo('m-node-modal');mShowPage('attendance');};
+  } else if(state==='done'){
+    prog.innerHTML=`<div style="font-size:12px;color:var(--green);font-weight:600;">✅ Completed on ${date}</div>`;
+    btn.textContent='View Certificate';
+    btn.onclick=()=>{closeMo('m-node-modal');mShowPage('certificates');};
+  } else {
+    prog.innerHTML='<div class="prog"><div class="prog-f" style="width:72%;background:var(--yellow);"></div></div><div style="font-size:12px;color:var(--t3);margin-top:5px;">72% · 2 more sessions needed</div>';
+    btn.textContent='Join Next Session';
+    btn.onclick=()=>{closeMo('m-node-modal');mShowPage('attendance');};
+  }
+  openMo('m-node-modal');
+}
+
+// ════════════════════════════════
+// COUNTDOWN
+// ════════════════════════════════
+function startCountdown() {
+  setInterval(()=>{
+    if(countdown<=0){
+      ['m-join-home','m-join-att'].forEach(id=>{
+        const el=document.getElementById(id); if(!el)return;
+        el.className='btn btn-red btn-sm'; el.textContent='🔴 Join Now — LIVE!';
+      }); return;
+    }
+    countdown--;
+    const h=Math.floor(countdown/3600),m=Math.floor((countdown%3600)/60),s=countdown%60;
+    const f=n=>String(n).padStart(2,'0');
+    [['m-hh','m-ah'],['m-hm','m-am'],['m-hs','m-as']].forEach(([id1,id2],i)=>{
+      const v=f([h,m,s][i]);
+      [id1,id2].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+    });
+  },1000);
+}
+
+// ════════════════════════════════
+// ADMIN CSV UPLOAD
+// ════════════════════════════════
+function aSimUpload() {
+  const z=document.getElementById('a-upload-zone');
+  if(z){z.innerHTML='<div style="font-size:28px;">⏳</div><div style="font-size:13px;font-weight:600;margin-top:7px;">Parsing CSV...</div>';}
+  setTimeout(()=>{
+    if(z)z.innerHTML='<div style="font-size:28px;">✅</div><div style="font-size:13px;font-weight:600;margin-top:7px;">CSV Uploaded!</div>';
+    document.getElementById('a-csv-res').classList.add('show');
+    aShowPage('attendance');
+  },1200);
+}
+
+// ════════════════════════════════
+// CONFETTI
+// ════════════════════════════════
+function triggerConfetti(){
+  const wrap=document.getElementById('confetti-wrap');
+  const cols=['#E53935','#1976D2','#FFC107','#2E7D32','#9C27B0'];
+  for(let i=0;i<35;i++){
+    const c=document.createElement('div');
+    c.className='confetto';
+    c.style.cssText=`left:${Math.random()*100}%;top:-10px;background:${cols[Math.floor(Math.random()*cols.length)]};transform:rotate(${Math.random()*360}deg);animation-delay:${Math.random()*0.8}s;animation-duration:${1.4+Math.random()*0.8}s;`;
+    wrap.appendChild(c);
+  }
+  setTimeout(()=>wrap.innerHTML='',3000);
+}
+
+// ════════════════════════════════
+// AI BOT — shared, role-aware
+// ════════════════════════════════
+const memberReplies = {
+  'next session':'Your next session is **Advanced HR Analytics Workshop** with Dr. Ana Reyes on Jun 15 at 2:00 PM. The Join Now button activates when it goes live! 🎯',
+  'mid level':'To reach **Mid Level** you need:\n✅ 80% overall attendance (you\'re at 72%)\n✅ Complete at least 3 skill tree tracks\n✅ Earn 6+ certificates\n\nJoin 2 more sessions to hit 80%! 🚀',
+  'skill tree':'Your Skill Tree status:\n\n✅ **Recruitment Basics** — Completed!\n🟡 **Compliance** — 72% (In Progress)\n🔒 All other tracks — Locked\n\nHit 80% attendance to unlock next nodes! 💪',
+  'certificate':'You have **4 certificates** so far! 🏆\n1. Digital Onboarding (Apr 2025)\n2. DOLE Compliance (Mar 2025)\n3. HR Tech Tools (Feb 2025)\n4. Recruitment Mastery (Dec 2024)\n\nGo to the Certificates page to download or share on LinkedIn!',
+  'unlock':'To unlock the next node:\n📋 Reach 80% attendance (you\'re at 72%)\n🎯 Join 2 more sessions in Compliance track\n\nI recommend the upcoming DOLE Compliance Refresher! 💡',
+  'default':'I can help you navigate sessions, career path, and certificates. Try asking about your next session, how to reach Mid level, or where your certificates are! 😊'
+};
+const adminReplies = {
+  'last session':'The last completed session was **Digital Onboarding Masterclass** (Jun 5). 215/250 attended (86%). 215 certificates generated. Revenue: ₱53,750. 🎉',
+  'pending csv':'**1 pending CSV upload**: DOLE Compliance Refresher (Jun 10) — 98 attendees, 5 days overdue. Go to Attendance Management → Upload CSV.',
+  'payment':'Payment summary for June 2025:\n💚 Collected: ₱186,400\n⏳ Pending: ₱3,600 (8 members)\n🎁 Waivers: 12 members\n\nTop method: GCash (64%).',
+  'popular':'Most popular expertise area: **Recruitment** at 92% attendance. Compliance follows at 84%. Consider 2 more Recruitment sessions in Q3. 🎯',
+  'certificates':'June MTD: **215 certificates** issued from Digital Onboarding. DOLE Compliance pending (CSV not uploaded yet). Total this year: **1,842 certificates**. 🏆',
+  'attendance':'Average session attendance this month is **78%**, down 2% from last month. Cavite leads at 85%, Quezon is lowest at 58% — targeted outreach recommended.',
+  'default':'I can help with session stats, pending actions, member data, certificates, and payment summaries. Try asking about pending CSVs, last session stats, or payment summary! 🤖'
+};
+
+function setupMemberBot(){
+  document.getElementById('bot-role-label').textContent='Member AI Assistant';
+  document.getElementById('bot-greeting').textContent='Hi Maria! 👋 I\'m GameBot. I can help you with sessions, career path, and certificates. What do you need?';
+  document.getElementById('bot-qp').innerHTML=`
+    <div class="qp" onclick="sendBot('Show my next session')">📅 Next session</div>
+    <div class="qp" onclick="sendBot('How do I reach Mid level?')">🚀 Mid level</div>
+    <div class="qp" onclick="sendBot('Where am I in Skill Tree?')">🗺 Skill Tree</div>
+    <div class="qp" onclick="sendBot('Where is my certificate?')">🏆 Certificates</div>
+    <div class="qp" onclick="sendBot('How do I unlock the next node?')">🔓 Unlock node</div>`;
+}
+function setupAdminBot(){
+  document.getElementById('bot-role-label').textContent='Admin AI Assistant';
+  document.getElementById('bot-greeting').textContent='Hi Juan! 👋 I\'m GameBot. I can help with session stats, member data, certificate status, and payment summaries. What do you need?';
+  document.getElementById('bot-qp').innerHTML=`
+    <div class="qp" onclick="sendBot('Last session stats')">📊 Last session</div>
+    <div class="qp" onclick="sendBot('Pending CSV uploads')">⏳ Pending CSVs</div>
+    <div class="qp" onclick="sendBot('Payment summary')">💳 Payments</div>
+    <div class="qp" onclick="sendBot('Most popular area')">🎯 Top area</div>
+    <div class="qp" onclick="sendBot('Certificates this month')">🏆 Certs</div>`;
+}
+function toggleBot(){
+  botOpen=!botOpen;
+  document.getElementById('bot-panel').classList.toggle('open',botOpen);
+}
+function sendBot(msg){
+  if(!msg?.trim())return;
+  const msgs=document.getElementById('bot-msgs');
+  msgs.innerHTML+=`<div class="bmsg u">${msg}</div>`;
+  document.getElementById('bot-in').value='';
+  const replies=currentRole==='admin' ? adminReplies : memberReplies;
+  let reply=replies['default'];
+  const ml=msg.toLowerCase();
+  for(const k in replies){
+    if(k!=='default'&&ml.includes(k)){reply=replies[k];break;}
+  }
+  setTimeout(()=>{
+    msgs.innerHTML+=`<div class="bmsg b">${reply.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}</div>`;
+    msgs.scrollTop=msgs.scrollHeight;
+  },550);
+  msgs.scrollTop=msgs.scrollHeight;
+  if(!botOpen)toggleBot();
+}
+
+// ════════════════════════════════
+// INIT
+// ════════════════════════════════
+document.getElementById('m-today').textContent = todayStr();
+document.getElementById('a-date').textContent = todayStr();
+</script>
+</body>
+</html>
