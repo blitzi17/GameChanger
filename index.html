@@ -482,7 +482,7 @@
           <div style="font-family:var(--font-h);font-size:19px;font-weight:700;">Good morning, Juan! 👋</div>
           <div style="font-size:13px;opacity:.7;margin-top:3px;" id="a-date"></div>
           <div style="display:flex;gap:11px;margin-top:13px;">
-            <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 15px;cursor:pointer;" onclick="aShowPage('attendance')"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em;">Pending CSV</div><div style="font-family:var(--font-h);font-size:20px;font-weight:800;">3</div></div>
+            <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 15px;cursor:pointer;" onclick="aShowPage('attendance')"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em;">Awaiting Zoom Sync</div><div style="font-family:var(--font-h);font-size:20px;font-weight:800;">1</div></div>
             <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 15px;cursor:pointer;" onclick="aShowPage('payments')"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em;">Pending Payments</div><div style="font-family:var(--font-h);font-size:20px;font-weight:800;">8</div></div>
             <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 15px;cursor:pointer;" onclick="openMo('a-create-session')"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em;">Active Sessions</div><div style="font-family:var(--font-h);font-size:20px;font-weight:800;">2</div></div>
           </div>
@@ -500,7 +500,7 @@
           <div class="ch"><div class="ct">Recent Sessions</div><button class="btn btn-sm btn-red" onclick="openMo('a-create-session')">+ New Session</button></div>
           <table class="dt"><thead><tr><th>Session</th><th>Date</th><th>Area</th><th>Attendees</th><th>Status</th></tr></thead><tbody>
             <tr><td class="nc">Advanced HR Analytics Workshop</td><td>Jun 15</td><td><span class="badge bg-b">HRIS</span></td><td>142/180</td><td><span class="badge bg-g">✓ Done</span></td></tr>
-            <tr><td class="nc">DOLE Compliance Refresher</td><td>Jun 10</td><td><span class="badge bg-r">Compliance</span></td><td>98/120</td><td><span class="badge bg-y">CSV Pending</span></td></tr>
+            <tr><td class="nc">DOLE Compliance Refresher</td><td>Jun 10</td><td><span class="badge bg-r">Compliance</span></td><td>98/120</td><td><span class="badge bg-y">⏳ Awaiting Sync</span></td></tr>
             <tr><td class="nc">Digital Onboarding Masterclass</td><td>Jun 5</td><td><span class="badge bg-t">Recruitment</span></td><td>215/250</td><td><span class="badge bg-g">✓ Done</span></td></tr>
           </tbody></table>
         </div>
@@ -509,7 +509,7 @@
             <div class="ct" style="margin-bottom:11px;">Quick Actions</div>
             <div style="display:flex;flex-direction:column;gap:7px;">
               <button class="btn btn-red" style="justify-content:flex-start;gap:10px;" onclick="openMo('a-create-session')">📅 Create New Session</button>
-              <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;" onclick="aShowPage('attendance')">📋 Upload Zoom CSV</button>
+              <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;" onclick="aShowPage('attendance')">🔄 Sync Zoom Attendance</button>
               <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;" onclick="aShowPage('members')">👥 Member Database</button>
               <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;" onclick="aShowPage('analytics')">📊 Open Analytics</button>
             </div>
@@ -602,9 +602,9 @@
           <div class="card cp" style="border-left:4px solid var(--blue);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px;"><span class="badge bg-b">📅 Upcoming</span><div style="display:flex;gap:5px;"><button class="btn btn-xs btn-ghost" onclick="openMo('a-edit-session')">✏ Edit</button><button class="btn btn-xs btn-danger" onclick="handleCancelSession(this,'Building Resilience in HR Teams')">Cancel</button></div></div><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:7px;">Building Resilience in HR Teams</div><div style="font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>📅 Jun 18, 2025 · 3:00 PM · 60 min</div><div>👤 Mr. Ramon Torres · Employee Relations</div><div>🔗 <span style="color:var(--blue);cursor:pointer;" onclick="copyZoomLink('https://zoom.us/j/74839201038')">zoom.us/j/74839201038</span></div><div>💳 ₱300 admission fee</div></div><div style="display:flex;gap:14px;margin-top:11px;"><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--blue);">87</div><div style="font-size:11px;color:var(--t3);">Registered</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--green);">79</div><div style="font-size:11px;color:var(--t3);">Paid</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--yellow);">8</div><div style="font-size:11px;color:var(--t3);">Pending</div></div><div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:var(--red);">120</div><div style="font-size:11px;color:var(--t3);">Capacity</div></div></div></div>
         </div>
       </div>
-      <div id="as-past" class="apanel"><div class="card"><table class="dt"><thead><tr><th>Session</th><th>Date</th><th>Area</th><th>Attendees</th><th>Certs</th><th>Revenue</th><th>CSV</th><th>Actions</th></tr></thead><tbody>
-        <tr><td class="nc">Digital Onboarding Masterclass</td><td>Jun 5</td><td><span class="badge bg-t">Recruitment</span></td><td>215/250</td><td><span class="badge bg-g">215</span></td><td>₱53,750</td><td><span class="badge bg-g">✓ Done</span></td><td><button class="btn btn-xs btn-ghost" onclick="aShowPage('attendance')">View Certs</button></td></tr>
-        <tr><td class="nc">DOLE Compliance Refresher</td><td>Jun 10</td><td><span class="badge bg-r">Compliance</span></td><td>98/120</td><td><span class="badge bg-y">Pending</span></td><td>₱24,500</td><td><span class="badge bg-y">⏳ Pending</span></td><td><button class="btn btn-xs btn-red" onclick="aShowPage('attendance')">Upload CSV</button></td></tr>
+      <div id="as-past" class="apanel"><div class="card"><table class="dt"><thead><tr><th>Session</th><th>Date</th><th>Area</th><th>Attendees</th><th>Certs</th><th>Revenue</th><th>Zoom Sync</th><th>Actions</th></tr></thead><tbody>
+        <tr><td class="nc">Digital Onboarding Masterclass</td><td>Jun 5</td><td><span class="badge bg-t">Recruitment</span></td><td>215/250</td><td><span class="badge bg-g">215</span></td><td>₱53,750</td><td><span class="badge bg-g">✓ Synced</span></td><td><button class="btn btn-xs btn-ghost" onclick="aShowPage('attendance')">View Certs</button></td></tr>
+        <tr><td class="nc">DOLE Compliance Refresher</td><td>Jun 10</td><td><span class="badge bg-r">Compliance</span></td><td>98/120</td><td><span class="badge bg-y">Pending</span></td><td>₱24,500</td><td><span class="badge bg-y">⏳ Awaiting Sync</span></td><td><button class="btn btn-xs btn-red" onclick="aShowPage('attendance')">Sync Now</button></td></tr>
       </tbody></table></div></div>
       <div id="as-draft" class="apanel"><div class="card cp" style="max-width:380px;border:2px dashed var(--border);"><span class="badge bg-gr" style="margin-bottom:9px;">Draft</span><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:5px;">HR Tech & AI Tools Showcase</div><div style="font-size:12px;color:var(--t3);margin-bottom:11px;">Created Jun 12</div><div style="display:flex;gap:7px;"><button class="btn btn-sm btn-red" onclick="openMo('a-edit-session')">Continue Editing</button><button class="btn btn-sm btn-danger" onclick="handleDeleteDraft(this)">Delete</button></div></div></div>
     </div>
@@ -612,41 +612,33 @@
     <!-- ADMIN ATTENDANCE -->
     <div id="ap-attendance" class="page">
       <div class="pill-tabs">
-        <button class="pt active" onclick="aSwitchTab(this,'at-upload')">📤 Upload CSV</button>
-        <button class="pt" onclick="aSwitchTab(this,'at-certs')">🏆 Certificates</button>
+        <button class="pt active" onclick="aSwitchTab(this,'at-certs')">🏆 Certificates</button>
         <button class="pt" onclick="aSwitchTab(this,'at-monitor')">📊 Distribution</button>
       </div>
-      <div id="at-upload" class="apanel active">
-        <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;">
-          <div class="card cp">
-            <div class="ct" style="margin-bottom:4px;">Upload Zoom Attendance CSV</div>
-            <div style="font-size:12px;color:var(--t2);margin-bottom:14px;">Upload the Zoom attendance CSV to auto-generate certificates for members with ≥80% attendance.</div>
-            <div class="fg2"><div class="fl2">Select Session</div><select class="fs2" id="a-csv-session"><option>-- Select session --</option><option>DOLE Compliance Refresher · Jun 10 ⏳</option><option>Advanced HR Analytics · Jun 15</option></select></div>
-            <!-- BACKEND HOOK: this dummy uploader just simulates a delay (aSimUpload in script.js).
-                 Wire <input type="file"> here and POST the file to /api/sessions/:id/attendance-csv -->
-            <div class="uz" onclick="aSimUpload()" id="a-upload-zone"><div style="font-size:30px;margin-bottom:9px;">📂</div><div style="font-family:var(--font-h);font-weight:600;font-size:14px;margin-bottom:3px;">Click to upload or drag & drop</div><div style="font-size:12px;color:var(--t3);">Zoom CSV only · Max 10MB</div></div>
-            <div class="csv-res" id="a-csv-res">
-              <div style="font-family:var(--font-h);font-size:13px;font-weight:700;color:var(--green);margin-bottom:7px;">✅ CSV Parsed Successfully!</div>
-              <div style="font-size:13px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>👥 <strong>Records found:</strong> 98 attendees</div><div>✅ <strong>Qualified (≥80%):</strong> 78 members</div><div>❌ <strong>Below threshold:</strong> 20 members</div></div>
-              <div style="margin-top:11px;display:flex;gap:7px;"><button class="btn btn-green btn-sm" onclick="handleGenerateCertificates(78)">Generate 78 Certificates</button><button class="btn btn-ghost btn-sm" onclick="document.getElementById('a-csv-res').classList.remove('show')">Cancel</button></div>
-            </div>
+      <div id="at-certs" class="apanel active">
+        <!-- Attendance now comes straight from the Zoom API — no manual CSV step.
+             BACKEND HOOK: this "Sync" card should call POST /api/sessions/:id/sync-zoom-attendance,
+             which pulls the participant report via the Zoom API server-side and returns
+             { attendees, qualified, belowThreshold } — same shape the old CSV parser produced. -->
+        <div class="card cp" style="margin-bottom:14px;">
+          <div class="ct" style="margin-bottom:4px;">🔄 Sync Attendance from Zoom</div>
+          <div style="font-size:12px;color:var(--t2);margin-bottom:14px;">Attendance is pulled automatically from the Zoom API. Sync a session to auto-generate certificates for members with ≥80% attendance.</div>
+          <div class="g2">
+            <div class="fg2"><div class="fl2">Select Session</div><select class="fs2" id="a-sync-session"><option>-- Select session --</option><option>DOLE Compliance Refresher · Jun 10 ⏳</option><option>Advanced HR Analytics · Jun 15</option></select></div>
+            <div class="fg2" style="display:flex;align-items:flex-end;"><button class="btn btn-red" style="width:100%;" onclick="aSimZoomSync()" id="a-sync-btn">🔄 Sync Now</button></div>
           </div>
-          <div class="card cp">
-            <div class="ct" style="margin-bottom:13px;">Pending Uploads</div>
-            <div style="display:flex;flex-direction:column;gap:9px;">
-              <div style="padding:11px;background:var(--red-l);border-radius:var(--r2);border-left:3px solid var(--red);"><div style="font-weight:600;font-size:13px;margin-bottom:3px;">DOLE Compliance Refresher</div><div style="font-size:12px;color:var(--t2);">Jun 10 · 98 attendees · 5 days overdue</div><button class="btn btn-xs btn-red" style="margin-top:5px;" onclick="aSimUpload()">Upload Now</button></div>
-              <div style="padding:11px;background:var(--yellow-l);border-radius:var(--r2);border-left:3px solid var(--yellow);"><div style="font-weight:600;font-size:13px;margin-bottom:3px;">Advanced HR Analytics (upcoming)</div><div style="font-size:12px;color:var(--t2);">Jun 15 · Not yet held</div><span class="badge bg-y" style="margin-top:5px;">After session ends</span></div>
-            </div>
+          <div class="result-box" id="a-sync-res">
+            <div style="font-family:var(--font-h);font-size:13px;font-weight:700;color:var(--green);margin-bottom:7px;">✅ Synced from Zoom!</div>
+            <div style="font-size:13px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>👥 <strong>Attendees synced:</strong> 98</div><div>✅ <strong>Qualified (≥80%):</strong> 78 members</div><div>❌ <strong>Below threshold:</strong> 20 members</div></div>
+            <div style="margin-top:11px;display:flex;gap:7px;"><button class="btn btn-green btn-sm" onclick="handleGenerateCertificates(78)">Generate 78 Certificates</button><button class="btn btn-ghost btn-sm" onclick="document.getElementById('a-sync-res').classList.remove('show')">Dismiss</button></div>
           </div>
         </div>
-      </div>
-      <div id="at-certs" class="apanel">
         <div class="fbar"><select class="fs2" style="width:auto;"><option>All Sessions</option><option>Digital Onboarding</option></select><button class="btn btn-ghost btn-sm" onclick="handleDownloadAllZip()">⬇ Download All (ZIP)</button><button class="btn btn-green btn-sm" onclick="handleBulkSend()">📧 Bulk Send</button></div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px;">
           <div class="cert-mini" style="background:linear-gradient(135deg,#1565C0,#0D47A1);" onclick="openMo('a-cert-detail')"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">🏆</div><div class="cmit">Digital Onboarding</div><div style="font-size:10px;opacity:.7;margin-top:2px;">215 issued</div></div></div>
           <div class="cert-mini" style="background:linear-gradient(135deg,#1B5E20,#2E7D32);" onclick="openMo('a-cert-detail')"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">🏅</div><div class="cmit">Comp Benchmarking</div><div style="font-size:10px;opacity:.7;margin-top:2px;">128 issued</div></div></div>
           <div class="cert-mini" style="background:linear-gradient(135deg,#4A148C,#6A1B9A);" onclick="openMo('a-cert-detail')"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">🎓</div><div class="cmit">Recruitment Mastery</div><div style="font-size:10px;opacity:.7;margin-top:2px;">189 issued</div></div></div>
-          <div class="cert-mini" style="background:linear-gradient(135deg,#B71C1C,#E53935);" onclick="handlePendingCert()"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">⏳</div><div class="cmit">DOLE Compliance</div><div style="font-size:10px;opacity:.7;margin-top:2px;">CSV Pending</div></div></div>
+          <div class="cert-mini" style="background:linear-gradient(135deg,#B71C1C,#E53935);" onclick="handlePendingCert()"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">⏳</div><div class="cmit">DOLE Compliance</div><div style="font-size:10px;opacity:.7;margin-top:2px;">Awaiting Sync</div></div></div>
         </div>
         <div class="card"><table class="dt"><thead><tr><th>Member</th><th>Session</th><th>Attendance</th><th>Certificate</th><th>Email</th><th>Actions</th></tr></thead><tbody>
           <tr><td class="nc">Maria Santos</td><td>Digital Onboarding</td><td><span class="badge bg-g">100%</span></td><td><span class="badge bg-g">✓ Issued</span></td><td><span class="badge bg-g">✓ Sent</span></td><td><div style="display:flex;gap:4px;"><button class="btn btn-xs btn-ghost" onclick="handleDownloadCert()">⬇ PDF</button><button class="btn btn-xs btn-ghost" onclick="handleResendCert('Maria Santos')">📧 Resend</button></div></td></tr>
@@ -661,7 +653,7 @@
         </div>
         <div class="card cp"><div class="ct" style="margin-bottom:13px;">Distribution by Session</div><div class="cb">
           <div class="cbr"><div class="cbl">Digital Onboarding</div><div class="cbt"><div class="cbf" style="width:100%;background:var(--green);"></div></div><div class="cbv" style="color:var(--green);">215/215</div></div>
-          <div class="cbr"><div class="cbl">DOLE Compliance</div><div class="cbt"><div class="cbf" style="width:0%;background:var(--yellow);"></div></div><div class="cbv" style="color:var(--yellow);">CSV Pending</div></div>
+          <div class="cbr"><div class="cbl">DOLE Compliance</div><div class="cbt"><div class="cbf" style="width:0%;background:var(--yellow);"></div></div><div class="cbv" style="color:var(--yellow);">Awaiting Sync</div></div>
           <div class="cbr"><div class="cbl">Recruitment Mastery</div><div class="cbt"><div class="cbf" style="width:88%;background:var(--blue);"></div></div><div class="cbv" style="color:var(--blue);">189/215</div></div>
         </div></div>
       </div>
@@ -676,10 +668,16 @@
         <div class="card cp" style="text-align:center;"><div style="font-size:20px;font-weight:800;font-family:var(--font-h);color:var(--purple);">12</div><div style="font-size:12px;color:var(--t2);">Waivers</div></div>
       </div>
       <div class="fbar"><select class="fs2" style="width:auto;"><option>All Sessions</option><option>Advanced HR Analytics</option><option>DOLE Compliance</option></select><select class="fs2" style="width:auto;"><option>All Status</option><option>Paid</option><option>Pending</option><option>Waived</option></select><input class="fi2" placeholder="Search member..." style="max-width:180px;"><button class="btn btn-ghost btn-sm" onclick="handleExport('payments Excel')">⬇ Export</button></div>
+      <!-- Payments are now confirmed automatically via the HitPay webhook (see US-3.1),
+           so the admin view here is read-only — a single "View" action opens the
+           Payment Details modal below. No manual Mark Paid / Waive actions.
+           BACKEND HOOK: GET /api/payments populates a-payments-tbody;
+           the webhook handler (POST /api/payments/hitpay-webhook) is what actually
+           flips a row from Pending → Paid server-side. -->
       <div class="card"><table class="dt"><thead><tr><th>Member</th><th>Session</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody id="a-payments-tbody">
-        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--blue);">MS</div><div class="nc">Maria Santos</div></div></td><td>DOLE Compliance</td><td style="font-weight:700;">₱500</td><td>GCash</td><td>Jun 12</td><td><span class="badge bg-g">✓ Paid</span></td><td><button class="btn btn-xs btn-ghost" onclick="handleViewReceipt('REF-2025-06-0847')">Receipt</button></td></tr>
-        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--yellow-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#B45309;">JP</div><div class="nc">Jose Padilla</div></div></td><td>HR Analytics</td><td style="font-weight:700;">₱500</td><td>—</td><td>—</td><td><span class="badge bg-y">⏳ Pending</span></td><td><div style="display:flex;gap:4px;"><button class="btn btn-xs btn-green" onclick="handleMarkPaid(this,'Jose Padilla')">✓ Paid</button><button class="btn btn-xs btn-ghost" onclick="handleWaive(this,'Jose Padilla')">Waive</button></div></td></tr>
-        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--green-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--green);">RC</div><div class="nc">Rico Cruz</div></div></td><td>Digital Onboarding</td><td style="font-weight:700;">₱0</td><td>—</td><td>—</td><td><span class="badge bg-p">🎁 Waived</span></td><td><button class="btn btn-xs btn-ghost" onclick="handleViewWaiverReason('MSME scholarship grant')">View Reason</button></td></tr>
+        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--blue);">MS</div><div class="nc">Maria Santos</div></div></td><td>DOLE Compliance</td><td style="font-weight:700;">₱500</td><td>GCash</td><td>Jun 12</td><td><span class="badge bg-g">✓ Paid</span></td><td><button class="btn btn-xs btn-ghost" onclick="openPaymentDetail('paid','Maria Santos','DOLE Compliance','₱500','GCash','Jun 12','REF-2025-06-0847')">View</button></td></tr>
+        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--yellow-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#B45309;">JP</div><div class="nc">Jose Padilla</div></div></td><td>HR Analytics</td><td style="font-weight:700;">₱500</td><td>—</td><td>—</td><td><span class="badge bg-y">⏳ Pending</span></td><td><button class="btn btn-xs btn-ghost" onclick="openPaymentDetail('pending','Jose Padilla','HR Analytics','₱500','—','—','')">View</button></td></tr>
+        <tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:var(--green-l);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--green);">RC</div><div class="nc">Rico Cruz</div></div></td><td>Digital Onboarding</td><td style="font-weight:700;">₱0</td><td>—</td><td>—</td><td><span class="badge bg-p">🎁 Waived</span></td><td><button class="btn btn-xs btn-ghost" onclick="openPaymentDetail('waived','Rico Cruz','Digital Onboarding','₱0','—','—','MSME scholarship grant')">View</button></td></tr>
       </tbody></table></div>
     </div>
 
@@ -726,6 +724,21 @@
   <div class="modal"><div class="mh"><div class="mt">🏆 Certificate Template</div><button class="mc" onclick="closeMo('a-cert-detail')">✕</button></div>
   <div class="mb"><div style="height:185px;background:linear-gradient(135deg,#1565C0,#0D47A1);border-radius:var(--r3);display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;margin-bottom:13px;"><div style="font-size:30px;margin-bottom:7px;">🏆</div><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.1em;">Certificate of Completion</div><div style="font-family:var(--font-h);font-size:17px;font-weight:700;margin-top:5px;">Digital Onboarding for HR Practitioners</div><div style="font-size:12px;opacity:.75;margin-top:3px;">HR Calabarzon · PHRCI Accredited</div><div style="width:46px;height:46px;background:white;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#999;margin-top:9px;">QR</div></div><div style="display:flex;gap:9px;flex-wrap:wrap;font-size:12px;"><span><span style="color:var(--t3);">Issued:</span> 215 certificates</span><span><span style="color:var(--t3);">Session:</span> Jun 5, 2025</span><span><span style="color:var(--t3);">Accreditation:</span> PHRCI</span></div></div>
   <div class="mf"><button class="btn btn-ghost" onclick="handleDownloadAllZip()">⬇ Download All</button><button class="btn btn-red" onclick="handleBulkSend()">📧 Send to Members</button></div></div>
+</div>
+<div class="mo" id="a-payment-detail">
+  <div class="modal"><div class="mh"><div class="mt">💳 Payment Details</div><button class="mc" onclick="closeMo('a-payment-detail')">✕</button></div>
+  <div class="mb">
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;">Member</div><div style="font-size:13px;font-weight:600;" id="apd-member">—</div></div>
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;">Session</div><div style="font-size:13px;font-weight:600;" id="apd-session">—</div></div>
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;">Amount</div><div style="font-size:13px;font-weight:600;" id="apd-amount">—</div></div>
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;">Method</div><div style="font-size:13px;font-weight:600;" id="apd-method">—</div></div>
+      <div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;">Date</div><div style="font-size:13px;font-weight:600;" id="apd-date">—</div></div>
+      <div style="display:flex;gap:10px;align-items:center;"><div style="font-size:12px;color:var(--t3);min-width:110px;">Status</div><div id="apd-status">—</div></div>
+      <div id="apd-extra-row" style="display:none;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;" id="apd-extra-label">—</div><div style="font-size:13px;font-weight:600;" id="apd-extra">—</div></div>
+    </div>
+  </div>
+  <div class="mf"><button class="btn btn-ghost" onclick="closeMo('a-payment-detail')">Close</button></div></div>
 </div>
 
 <!-- SHARED AI BOT -->
