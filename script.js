@@ -261,6 +261,7 @@ function showLoginErr(msg) {
 function switchToLogin() {
   document.getElementById('member-app').style.display = 'none';
   document.getElementById('admin-app').style.display = 'none';
+  document.getElementById('register-page').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
   botOpen = false;
   document.getElementById('bot-panel').classList.remove('open');
@@ -292,9 +293,92 @@ function handleLinkedInLogin() {
   // BACKEND HOOK: kick off OAuth flow, e.g. window.location = '/api/auth/linkedin'
   showToast('Redirecting to LinkedIn sign-in...', 'info');
 }
-function handleJoinCommunity() {
-  // BACKEND HOOK: navigate to a signup page / open a registration modal
-  showToast('Opening HR Calabarzon Community sign-up...', 'info');
+
+// ════════════════════════════════════════════════
+// REGISTRATION
+// ════════════════════════════════════════════════
+function showRegisterPage() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('register-page').style.display = 'flex';
+  document.getElementById('register-err').style.display = 'none';
+  window.scrollTo(0, 0);
+}
+function showLoginPage() {
+  document.getElementById('register-page').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+  window.scrollTo(0, 0);
+}
+function showRegisterErr(msg) {
+  const el = document.getElementById('register-err');
+  el.textContent = msg; el.style.display = 'block';
+}
+function handleRegister() {
+  const fullName    = document.getElementById('r-fullname').value.trim();
+  const email       = document.getElementById('r-email').value.trim();
+  const pass        = document.getElementById('r-pass').value;
+  const pass2       = document.getElementById('r-pass2').value;
+  const province    = document.getElementById('r-province').value;
+  const company     = document.getElementById('r-company').value.trim();
+  const department  = document.getElementById('r-department').value.trim();
+  const position    = document.getElementById('r-position').value.trim();
+
+  document.getElementById('register-err').style.display = 'none';
+
+  if (!fullName || !email || !pass || !pass2 || !province || !company || !department || !position) {
+    showRegisterErr('Please fill in all fields.');
+    return;
+  }
+  if (!email.includes('@')) {
+    showRegisterErr('Please enter a valid email address.');
+    return;
+  }
+  if (pass.length < 6) {
+    showRegisterErr('Password must be at least 6 characters.');
+    return;
+  }
+  if (pass !== pass2) {
+    showRegisterErr('Passwords do not match.');
+    return;
+  }
+
+  const btn = document.getElementById('register-btn');
+  const origText = btn.textContent;
+  btn.textContent = 'Creating account...'; btn.disabled = true;
+
+  // ──────────────────────────────────────────────
+  // BACKEND HOOK: replace this whole block with a real registration call:
+  //
+  //   apiRequest('/auth/register', {
+  //     method: 'POST',
+  //     body: JSON.stringify({ fullName, email, password: pass, province, company, department, position })
+  //   }).then(() => {
+  //     showLoginPage();
+  //     showToast('Account created! Sign in to continue.', 'success');
+  //   }).catch(() => showRegisterErr('Registration failed. Please try again.'));
+  //
+  // For now we just simulate a short delay and add the new account to the
+  // in-memory DUMMY_USERS table so it could (in a real backend) be used to
+  // log in immediately after.
+  // ──────────────────────────────────────────────
+  setTimeout(() => {
+    btn.textContent = origText; btn.disabled = false;
+
+    DUMMY_USERS.members.push({
+      credential: email,
+      password: pass,
+      id: `HRC-2025-${String(1000 + DUMMY_USERS.members.length)}`,
+      name: fullName,
+      initials: fullName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'ME'
+    });
+
+    ['r-fullname','r-email','r-pass','r-pass2','r-company','r-department','r-position'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('r-province').value = '';
+
+    showLoginPage();
+    showToast(`Account created! Sign in as ${fullName.split(' ')[0]} to continue.`, 'success', 4000);
+  }, 900);
 }
 
 // ════════════════════════════════════════════════
