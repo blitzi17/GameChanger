@@ -576,28 +576,27 @@ function copyZoomLink(url) {
 }
 
 // ════════════════════════════════════════════════
-// ADMIN: CSV upload / certificate generation
+// ADMIN: Zoom attendance sync / certificate generation
+// (Attendance no longer comes from a manual CSV upload —
+// it's pulled directly from the Zoom API.)
 // ════════════════════════════════════════════════
-function aSimUpload() {
-  // BACKEND HOOK: replace this simulated delay with a real upload:
+function aSimZoomSync() {
+  // BACKEND HOOK: replace this simulated delay with a real call to your
+  // server, which in turn calls the Zoom API (e.g. the "Meeting/Webinar
+  // Participant Reports" endpoint) for the selected session:
   //
-  //   const input = document.createElement('input');
-  //   input.type = 'file'; input.accept = '.csv';
-  //   input.onchange = async () => {
-  //     const form = new FormData();
-  //     form.append('file', input.files[0]);
-  //     const res = await fetch('/api/sessions/123/attendance-csv', { method:'POST', body: form });
-  //     const result = await res.json(); // { records, qualified, belowThreshold }
-  //     ...render result...
-  //   };
-  //   input.click();
+  //   const sessionId = document.getElementById('a-sync-session').value;
+  //   const res = await fetch(`/api/sessions/${sessionId}/sync-zoom-attendance`, { method: 'POST' });
+  //   const result = await res.json(); // { attendees, qualified, belowThreshold }
+  //   ...render result...
   //
-  const z=document.getElementById('a-upload-zone');
-  if(z){z.innerHTML='<div style="font-size:28px;">⏳</div><div style="font-size:13px;font-weight:600;margin-top:7px;">Parsing CSV...</div>';}
+  const btn = document.getElementById('a-sync-btn');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ Syncing...'; btn.disabled = true;
   setTimeout(()=>{
-    if(z)z.innerHTML='<div style="font-size:28px;">✅</div><div style="font-size:13px;font-weight:600;margin-top:7px;">CSV Uploaded!</div>';
-    document.getElementById('a-csv-res').classList.add('show');
-    aShowPage('attendance');
+    btn.textContent = origText; btn.disabled = false;
+    document.getElementById('a-sync-res').classList.add('show');
+    showToast('Attendance synced from Zoom.', 'success');
   },1200);
 }
 function handleGenerateCertificates(count) {
@@ -613,7 +612,7 @@ function handleBulkSend() {
   showToast('Bulk emailing certificates...', 'success');
 }
 function handlePendingCert() {
-  showToast('DOLE Compliance — upload the CSV first to generate certificates.', 'info');
+  showToast('DOLE Compliance — sync attendance from Zoom first to generate certificates.', 'info');
 }
 function handleResendCert(name) {
   // BACKEND HOOK: POST /api/certificates/:id/resend
@@ -627,30 +626,43 @@ function handleOverrideCert(btn, name) {
 }
 
 // ════════════════════════════════════════════════
-// ADMIN: payments
+// ADMIN: payments — VIEW ONLY.
+// Payment status is confirmed automatically by the HitPay webhook
+// (see US-3.1), so there's no manual Mark Paid / Waive action here —
+// the admin just opens a read-only Payment Details modal.
+// BACKEND HOOK: the row data below is currently inline in index.html;
+// swap it for GET /api/payments and pass the fetched record straight
+// into openPaymentDetail(). The actual status change happens server-side
+// at POST /api/payments/hitpay-webhook, not from this UI.
 // ════════════════════════════════════════════════
-function handleMarkPaid(btn, name) {
-  // BACKEND HOOK: POST /api/payments/:id/mark-paid
-  const row = btn.closest('tr');
-  row.querySelector('td:nth-child(6)').innerHTML = '<span class="badge bg-g">✓ Paid</span>';
-  btn.closest('div').innerHTML = `<button class="btn btn-xs btn-ghost" onclick="handleViewReceipt('REF-DEMO')">Receipt</button>`;
-  showToast(`${name} marked as paid.`, 'success');
-}
-function handleWaive(btn, name) {
-  const reason = prompt(`Reason for waiving ${name}'s fee?`, 'MSME scholarship grant');
-  if (reason === null) return;
-  // BACKEND HOOK: POST /api/payments/:id/waive { reason }
-  const row = btn.closest('tr');
-  row.querySelector('td:nth-child(6)').innerHTML = '<span class="badge bg-p">🎁 Waived</span>';
-  btn.closest('div').innerHTML = `<button class="btn btn-xs btn-ghost" onclick="handleViewWaiverReason('${reason}')">View Reason</button>`;
-  showToast(`Waiver granted for ${name}.`, 'success');
-}
-function handleViewReceipt(ref) {
-  // BACKEND HOOK: GET /api/payments/receipt/:ref
-  showToast(`Receipt: ${ref}`, 'info');
-}
-function handleViewWaiverReason(reason) {
-  showToast(`Waiver reason: ${reason}`, 'info');
+const paymentStatusBadge = {
+  paid:    '<span class="badge bg-g">✓ Paid</span>',
+  pending: '<span class="badge bg-y">⏳ Pending</span>',
+  waived:  '<span class="badge bg-p">🎁 Waived</span>'
+};
+function openPaymentDetail(status, member, session, amount, method, date, extra) {
+  document.getElementById('apd-member').textContent  = member;
+  document.getElementById('apd-session').textContent = session;
+  document.getElementById('apd-amount').textContent  = amount;
+  document.getElementById('apd-method').textContent  = method;
+  document.getElementById('apd-date').textContent    = date;
+  document.getElementById('apd-status').innerHTML    = paymentStatusBadge[status] || status;
+
+  const extraRow   = document.getElementById('apd-extra-row');
+  const extraLabel = document.getElementById('apd-extra-label');
+  const extraVal   = document.getElementById('apd-extra');
+  if (status === 'paid' && extra) {
+    extraRow.style.display = 'flex';
+    extraLabel.textContent = 'Reference No.';
+    extraVal.textContent = extra;
+  } else if (status === 'waived' && extra) {
+    extraRow.style.display = 'flex';
+    extraLabel.textContent = 'Waiver Reason';
+    extraVal.textContent = extra;
+  } else {
+    extraRow.style.display = 'none';
+  }
+  openMo('a-payment-detail');
 }
 
 // ════════════════════════════════════════════════
