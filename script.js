@@ -7,120 +7,78 @@
    index.html  <link rel="stylesheet" href="style.css">   (styling)
    index.html  <script src="script.js"></script>          (this file)
    Every onclick="..." attribute in index.html calls a function
-   defined in this file. Every id="..." referenced below with
-   document.getElementById(...) must exist in index.html.
+   defined in this file.
 
-   ════════════════════════════════════════════════════════════════
-   🔌 BACKEND / DATABASE INTEGRATION — READ ME FIRST
-   ════════════════════════════════════════════════════════════════
-   This file currently runs entirely on DUMMY DATA (the objects/arrays
-   in the "DUMMY DATA" section below) so the whole app works offline,
-   with no server. To connect a real backend + database:
-
-   1. Create an API layer (e.g. a small Express/Django/Laravel app,
-      or Firebase/Supabase) that exposes REST or GraphQL endpoints.
-   2. Replace the dummy arrays with fetch() calls to that API.
-      Search this file for "BACKEND HOOK" — every one marks an
-      exact spot where a fetch() call should replace dummy logic.
-   3. Typical endpoints this UI would need:
-        POST   /api/auth/login              { credential, password }
-        POST   /api/auth/logout
-        GET    /api/members                 (paginated list)
-        POST   /api/members                 (add member)
-        GET    /api/members/:id
-        GET    /api/sessions                (upcoming/past/draft)
-        POST   /api/sessions                (create session)
-        PUT    /api/sessions/:id            (edit session)
-        DELETE /api/sessions/:id            (cancel session)
-        POST   /api/sessions/:id/attendance-csv   (multipart upload)
-        POST   /api/sessions/:id/certificates     (generate certs)
-        GET    /api/members/:id/certificates
-        GET    /api/payments
-        POST   /api/payments/:id/mark-paid
-        POST   /api/payments/:id/waive
-        POST   /api/chatbot                 { message, role }
-        GET    /api/stats/overview          (member/province counts)
-   4. A minimal fetch() example (see also apiRequest() helper below):
-
-        async function apiLogin(credential, password) {
-          const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ credential, password })
-          });
-          if (!res.ok) throw new Error('Login failed');
-          return res.json(); // { token, role, user }
-        }
-
-   5. Swap localStorage-free in-memory arrays (membersData,
-      sessionsData, paymentsData, certData) for data fetched on
-      page load, and re-render the relevant table/grid after every
-      create/update/delete instead of mutating the array directly.
+   DATA
+   ────
+   Everything shown on the page comes from Supabase — there is no
+   hardcoded/dummy data. The SQL functions this file calls are in
+   supabase/01_setup.sql … 05_live_data.sql:
+     public_stats()      login page numbers
+     member_dashboard()  everything on the member pages
+     admin_dashboard()   everything on the admin pages
+     member_* / admin_*  buttons that change data
+   When a table is empty the page shows a "nothing yet" message.
    ════════════════════════════════════════════════════════════════ */
 
 
 // ════════════════════════════════════════════════
-// GENERIC API HELPER (currently unused by default —
-// wire it up once a real backend exists)
+// SUPABASE CONNECTION
+// Copy these two values from:
+//   Supabase Dashboard → Project Settings → API
+// The "anon / public" key is meant for the browser.
+// NEVER paste the "service_role" key here.
 // ════════════════════════════════════════════════
-const API_BASE_URL = '/api'; // BACKEND HOOK: point this at your real API host
+const SUPABASE_URL      = 'https://xszowbctpuqbszagzdwa.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzem93YmN0cHVxYnN6YWd6ZHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NTcyOTMsImV4cCI6MjEwNTUzMzI5M30.oeNCiiRMqnyDWzrwoE5AJldK_83UiqU728aLUk_xdrQ';
 
-async function apiRequest(path, options = {}) {
-  // BACKEND HOOK: this is the single place to add auth headers,
-  // e.g. 'Authorization': `Bearer ${authToken}`
-  const res = await fetch(API_BASE_URL + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
-  if (!res.ok) throw new Error(`API error ${res.status} on ${path}`);
-  return res.json();
+// Where the links inside Supabase emails (confirm sign-up, reset password)
+// bring the user back to. This exact URL must also be added in:
+//   Authentication → URL Configuration → Redirect URLs
+// (index.html is dropped so every page address gives the same link)
+const APP_URL = window.location.origin + window.location.pathname.replace(/index\.html$/i, '');
+// The address put in confirmation / password-reset emails. Emails are often opened on a
+// phone, so a link to localhost or 127.0.0.1 (a developer's own computer) would not open.
+// When the site runs anywhere local, email links point to the public site instead.
+// This address must also be listed in Supabase → Authentication → URL Configuration.
+const PUBLIC_SITE_URL = 'https://cozytan.github.io/GameChanger/';
+const EMAIL_LINK_URL = /^https:$/.test(window.location.protocol) && !/^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(window.location.hostname)
+  ? APP_URL : PUBLIC_SITE_URL;
+
+// Read the URL BEFORE the Supabase client consumes it, so we know whether the
+// user just clicked a "reset password" or "confirm email" link.
+const ARRIVED_FROM = (() => {
+  const h = new URLSearchParams(window.location.hash.slice(1));
+  const q = new URLSearchParams(window.location.search);
+  return {
+    type:    h.get('type')  || q.get('type'),
+    error:   h.get('error_description') || q.get('error_description'),
+    message: h.get('message') || q.get('message')
+  };
+})();
+
+if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+  console.error('Supabase library did not load. Check the <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"> tag in index.html (it must come before script.js).');
+}
+if (window.location.protocol === 'file:') {
+  console.warn('You opened index.html directly from disk (file://). Email links cannot return to a file:// page. Serve the folder instead, e.g. VS Code "Live Server" → http://127.0.0.1:5500/index.html');
 }
 
+// Named "sb" so it doesn't clash with the global "supabase" library object.
+// flowType 'implicit': the link in a reset / confirmation email works even
+// when it is opened on a different phone or computer than the one used to ask.
+// Removes the token / #register part from the address bar (never throws)
+function cleanUrl() { try { history.replaceState(null, '', APP_URL); } catch (e) { /* e.g. file:// pages */ } }
 
-// ════════════════════════════════════════════════
-// DUMMY DATA
-// Replace each of these with data loaded from your
-// backend (see BACKEND HOOK comments near each use).
-// ════════════════════════════════════════════════
-
-// Login credentials for the demo. In production, authentication
-// happens on the server — never ship real passwords to the client.
-const DUMMY_USERS = {
-  members: [
-    { credential: 'maria@hrcalabarzon.ph', password: 'password123', id: 'HRC-2024-0847', name: 'Maria Santos', initials: 'MS' }
-  ],
-  admins: [
-    { credential: 'ADM-2025-0001', password: 'password123', id: 'ADM-2025-0001', name: 'Juan Dela Cruz', initials: 'JD' }
-  ]
-};
-
-const statsData = { members: '17k+', provinces: 5, tracks: 7 };
-
-// BACKEND HOOK: GET /api/members?page=1&pageSize=20
-let membersData = [
-  { name:'Maria Santos', initials:'MS', color:'blue', id:'HRC-2024-0847', province:'Cavite', expertise:'Recruitment', expertiseBadge:'bg-t', level:'Entry', levelBadge:'bg-y', attendance:72, certs:4, status:'Active' },
-  { name:'Jose Padilla', initials:'JP', color:'green', id:'HRC-2024-0612', province:'Laguna', expertise:'Compliance', expertiseBadge:'bg-b', level:'Mid', levelBadge:'bg-b', attendance:88, certs:9, status:'Active' },
-  { name:'Ana Lim', initials:'AL', color:'red', id:'HRC-2023-0204', province:'Batangas', expertise:'L&D', expertiseBadge:'bg-p', level:'Senior', levelBadge:'bg-r', attendance:95, certs:18, status:'Active' },
-  { name:'Rico Cruz', initials:'RC', color:'yellow', id:'HRC-2024-1102', province:'Rizal', expertise:'HRIS', expertiseBadge:'bg-t', level:'Entry', levelBadge:'bg-y', attendance:60, certs:2, status:'Inactive' }
-];
-
-// BACKEND HOOK: GET /api/members/:id/certificates
-const certData = [
-  { title:'Digital Onboarding for HR Practitioners', short:'Digital Onboarding', date:'April 2, 2025', dateShort:'Apr 2, 2025', acc:'PHRCI Accredited', accShort:'PHRCI', bg:'linear-gradient(135deg,#1565C0,#0D47A1)', seal:'🏆' },
-  { title:'DOLE Compliance Workshop 2025', short:'DOLE Compliance', date:'March 10, 2025', dateShort:'Mar 10, 2025', acc:'DOLE Accredited', accShort:'DOLE', bg:'linear-gradient(135deg,#B71C1C,#E53935)', seal:'🏅' },
-  { title:'HR Tech Tools Demo Day', short:'HR Tech Tools', date:'February 22, 2025', dateShort:'Feb 22, 2025', acc:'TESDA Recognized', accShort:'TESDA', bg:'linear-gradient(135deg,#1B5E20,#2E7D32)', seal:'🎓' },
-  { title:'Recruitment Basics Mastery 2024', short:'Recruitment Mastery', date:'December 5, 2024', dateShort:'Dec 5, 2024', acc:'PHRCI Accredited', accShort:'PHRCI', bg:'linear-gradient(135deg,#4A148C,#6A1B9A)', seal:'⭐' }
-];
-
-// BACKEND HOOK: GET /api/sessions?status=upcoming|past|draft
-let sessionsData = { upcoming: 2, past: 22, draft: 1 };
+const sb = window.supabase.createClient(new URL(SUPABASE_URL).origin, SUPABASE_ANON_KEY.trim(), {
+  auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true }
+});
 
 // ════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════
 let currentRole = 'member'; // auto-detected from credential format
 let botOpen = false;
-let countdown = 2*3600 + 34*60 + 15;
 let loggedInUser = null;
 
 // ════════════════════════════════════════════════
@@ -177,23 +135,220 @@ function detectCredential(val) {
   }
 }
 
-function doLogin() {
+// ════════════════════════════════════════════════
+// EMAIL VALIDATION
+// No website can prove a mailbox exists without emailing it — that is
+// what Supabase's confirmation link does (the account can't sign in until
+// the link is clicked). Before that, we reject what we CAN detect:
+//   1. bad format            (juan@, juan@gmail, juan gmail.com)
+//   2. common domain typos   (gmial.com, gmail.con, yaho.com)
+//   3. domains with no mail server (checked through public DNS)
+//   4. emails already registered   (email_status() SQL function)
+// ════════════════════════════════════════════════
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/;
+
+const DOMAIN_TYPOS = {
+  'gmial.com':'gmail.com','gmal.com':'gmail.com','gmai.com':'gmail.com','gamil.com':'gmail.com',
+  'gnail.com':'gmail.com','gmail.co':'gmail.com','gmail.con':'gmail.com','gmail.cm':'gmail.com','gmail.om':'gmail.com',
+  'yaho.com':'yahoo.com','yahooo.com':'yahoo.com','yahoo.con':'yahoo.com','yahoo.co':'yahoo.com',
+  'hotmial.com':'hotmail.com','hotmal.com':'hotmail.com','hotmail.con':'hotmail.com',
+  'outlok.com':'outlook.com','outloo.com':'outlook.com','outlook.con':'outlook.com',
+  'icloud.con':'icloud.com','iclod.com':'icloud.com'
+};
+
+// Ask Google's public DNS whether the domain can receive email.
+// Returns true / false, or null when the check itself couldn't run
+// (offline, blocked by a firewall) — in that case we don't block the user.
+async function domainAcceptsMail(domain) {
+  async function dns(type) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${type}`, { signal: ctrl.signal });
+      return res.ok ? await res.json() : null;
+    } finally { clearTimeout(timer); }
+  }
+  try {
+    const mx = await dns('MX');
+    if (!mx) return null;
+    if (mx.Status === 3) return false;          // NXDOMAIN — the domain doesn't exist
+    if (mx.Status !== 0) return null;
+    const records = (mx.Answer || []).filter(a => a.type === 15);
+    if (records.length) {
+      // "Null MX" (priority 0, host ".") means the domain explicitly accepts no mail
+      return !records.every(a => /^0\s+\.?$/.test(String(a.data).trim()));
+    }
+    const a = await dns('A');                   // no MX → mail falls back to the A record
+    return a ? (a.Answer || []).some(r => r.type === 1) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Returns { ok: boolean, msg: string }
+async function validateEmail(rawEmail, { checkDuplicate = false } = {}) {
+  const email = rawEmail.trim().toLowerCase();
+  if (!email) return { ok: false, msg: 'Please enter your email address.' };
+  if (!EMAIL_REGEX.test(email) || email.includes('..')) {
+    return { ok: false, msg: 'That doesn\'t look like a valid email address (example: juan@gmail.com).' };
+  }
+  const domain = email.split('@')[1];
+  if (DOMAIN_TYPOS[domain]) {
+    return { ok: false, msg: `Did you mean ${email.split('@')[0]}@${DOMAIN_TYPOS[domain]}? "${domain}" looks like a typo.` };
+  }
+  const acceptsMail = await domainAcceptsMail(domain);
+  if (acceptsMail === false) {
+    return { ok: false, msg: `The domain "${domain}" doesn't exist or can't receive email. Please check the spelling.` };
+  }
+  if (checkDuplicate) {
+    // 'none' | 'unconfirmed' | 'confirmed'. An unconfirmed address may sign up
+    // again — Supabase simply re-sends the confirmation link.
+    const { data, error } = await sb.rpc('email_status', { p_email: email });
+    if (!error && data === 'confirmed') {
+      return { ok: false, msg: 'This email is already registered. Sign in instead, or use "Forgot password?".' };
+    }
+  }
+  return { ok: true, msg: '' };
+}
+
+// Live feedback while typing the registration email
+async function liveCheckEmail(value) {
+  const hint = document.getElementById('r-email-hint');
+  if (!hint || !value.trim()) return;
+  hint.style.color = 'var(--t3)';
+  hint.textContent = 'Checking email...';
+  const result = await validateEmail(value, { checkDuplicate: true });
+  if (document.getElementById('r-email').value.trim() !== value.trim()) return; // user kept typing
+  hint.style.color = result.ok ? 'var(--green, #2E7D32)' : 'var(--red-d)';
+  hint.textContent = result.ok
+    ? '✓ Looks good. We\'ll send a confirmation link to this address.'
+    : result.msg;
+}
+function clearEmailHint() {
+  const hint = document.getElementById('r-email-hint');
+  if (!hint) return;
+  hint.style.color = 'var(--t3)';
+  hint.textContent = 'A confirmation link will be sent to this address. You must click it before you can sign in.';
+}
+
+// Turn Supabase error messages into something a member understands,
+// and log the technical reason for whoever is maintaining the app.
+function friendlyAuthError(error) {
+  const m = (error && error.message ? error.message : String(error)).toLowerCase();
+  console.error('[Supabase]', error);
+  if (m.includes('invalid login credentials'))  return 'Incorrect email/Admin ID or password.';
+  if (m.includes('banned') || m.includes('archived')) return 'This account has been archived. Please contact an HR Calabarzon admin.';
+  if (m.includes('email not confirmed'))        return 'Please confirm your email first — open the link we sent to your inbox (check Spam too).';
+  if (m.includes('already registered'))         return 'This email is already registered. Sign in instead, or use "Forgot password?".';
+  if (m.includes('security purposes') || m.includes('only request this after'))
+    return 'Please wait about a minute before requesting another link.';
+  if (m.includes('rate limit') || m.includes('too many') || (error && error.status === 429))
+    return 'Too many emails were requested. Please wait a while and try again. (Admin: Supabase\'s built-in mailer allows only a few emails per hour — set up custom SMTP.)';
+  if (m.includes('not authorized') || m.includes('error sending'))
+    return 'We couldn\'t send the email. (Admin: Supabase\'s built-in mailer only delivers to your Supabase team members — set up custom SMTP under Authentication → Emails → SMTP Settings.)';
+  if (m.includes('database error'))
+    return 'The account could not be saved. (Admin: run the supabase_setup.sql script in the SQL Editor — the profile trigger is failing.)';
+  if (m.includes('password should be') || m.includes('weak password'))
+    return 'Password is too weak. Use at least 6 characters.';
+  if (m.includes('failed to fetch') || m.includes('network'))
+    return 'Can\'t reach the server. Check your internet connection and your SUPABASE_URL in script.js.';
+  return error && error.message ? error.message : 'Something went wrong. Please try again.';
+}
+
+// ════════════════════════════════════════════════
+// SESSION / PROFILE
+// ════════════════════════════════════════════════
+function makeInitials(name) {
+  return (name || '').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'ME';
+}
+
+// Reads the row for this user from public.profiles (created by the SQL trigger)
+async function loadProfile(user) {
+  const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (error) console.error('[Supabase] Could not load profile:', error);
+  const meta = user.user_metadata || {};
+  const p = data || {};
+  const name = p.full_name || meta.full_name || user.email;
+  return {
+    uid:      user.id,
+    id:       p.member_id || '—',
+    role:     p.role || 'member',
+    name,
+    initials: makeInitials(name),
+    email:    user.email,
+    province: p.province || meta.province || '',
+    company:  p.company  || meta.company  || '',
+    department: p.department || meta.department || '',
+    position: p.position || meta.position || '',
+    status:   p.status || 'Active'
+  };
+}
+
+// ════════════════════════════════════════════════
+// ACTIVITY LOGS  (tables created by supabase/03_logs.sql)
+//   member_attendance_logs / admin_attendance_logs → sign-in & sign-out
+//   admin_activity_logs                            → what admins changed
+// Logging never blocks the user: failures only show in the console.
+// ════════════════════════════════════════════════
+async function logSignIn(method) {
+  try {
+    const { error } = await sb.rpc('log_sign_in', { p_method: method, p_user_agent: navigator.userAgent });
+    if (error) console.error('[Supabase] sign-in log failed:', error);
+  } catch (e) { console.error('[Supabase] sign-in log failed:', e); }
+}
+async function logSignOut() {
+  try {
+    const { error } = await sb.rpc('log_sign_out', { p_user_agent: navigator.userAgent });
+    if (error) console.error('[Supabase] sign-out log failed:', error);
+  } catch (e) { console.error('[Supabase] sign-out log failed:', e); }
+}
+// Failed attempts go to login_audit (wrong password, unconfirmed email…)
+function logFailedLogin(identifier, reason) {
+  sb.rpc('log_failed_login', { p_identifier: identifier, p_reason: reason, p_user_agent: navigator.userAgent })
+    .then(({ error }) => { if (error) console.error('[Supabase] failed-login log failed:', error); });
+}
+// Call from any admin action: logAdminAction('Published session', title, { extra: 'info' })
+function logAdminAction(action, target = null, details = null) {
+  if (currentRole !== 'admin' || !loggedInUser) return;
+  sb.rpc('log_admin_action', { p_action: action, p_target: target, p_details: details })
+    .then(({ error }) => { if (error) console.error('[Supabase] admin activity log failed:', error); });
+}
+
+// loginMode: 'admin' when the user typed an Admin ID, 'member' for email, null for a restored session
+async function startSession(user, loginMode) {
+  const profile = await loadProfile(user);
+  if (profile.status === 'Archived') {
+    await sb.auth.signOut();
+    throw new Error('This account has been archived. Please contact an HR Calabarzon admin.');
+  }
+  if (loginMode === 'admin' && profile.role !== 'admin') {
+    logFailedLogin(profile.id, 'not an admin account');
+    await sb.auth.signOut();
+    throw new Error('This Admin ID does not belong to an admin account.');
+  }
+  loggedInUser = profile;
+  currentRole  = profile.role === 'admin' ? 'admin' : 'member';
+  enterApp();
+  // A typed login is always logged. A restored session (page reload) only
+  // starts a new row if the user has no recent open sign-in.
+  logSignIn(loginMode ? 'password' : 'session_restored');
+}
+
+let pendingConfirmEmail = null;
+
+async function doLogin() {
   const cred = document.getElementById('l-cred').value.trim();
   const p    = document.getElementById('l-pass').value;
   const err  = document.getElementById('login-err');
-
   err.style.display = 'none';
 
   if (!cred || !p) {
     showLoginErr('Please enter your ' + (currentRole === 'admin' ? 'Admin ID' : 'email address') + ' and password.');
     return;
   }
-  if (currentRole === 'member' && !cred.includes('@')) {
+  const loginMode = isAdminId(cred) ? 'admin' : 'member';
+  if (loginMode === 'member' && !EMAIL_REGEX.test(cred)) {
     showLoginErr('Please enter a valid email address. Admin IDs use the format ADM-YYYY-NNNN.');
-    return;
-  }
-  if (currentRole === 'admin' && !isAdminId(cred)) {
-    showLoginErr('Admin ID format is invalid. Expected format: ADM-YYYY-NNNN (e.g. ADM-2025-0001).');
     return;
   }
 
@@ -201,72 +356,122 @@ function doLogin() {
   const origText = btn.textContent;
   btn.textContent = 'Signing in...'; btn.disabled = true;
 
-  // ──────────────────────────────────────────────
-  // BACKEND HOOK: replace this whole block with a real login call:
-  //
-  //   apiRequest('/auth/login', {
-  //     method: 'POST',
-  //     body: JSON.stringify({ credential: cred, password: p })
-  //   }).then(data => {
-  //     authToken = data.token;      // store the session token
-  //     loggedInUser = data.user;
-  //     currentRole = data.role;     // 'member' | 'admin'
-  //     enterApp();
-  //   }).catch(() => showLoginErr('Invalid credentials.'));
-  //
-  // For now we just check the DUMMY_USERS table above.
-  // ──────────────────────────────────────────────
-  setTimeout(() => {
-    btn.textContent = origText; btn.disabled = false;
-
-    const pool = currentRole === 'admin' ? DUMMY_USERS.admins : DUMMY_USERS.members;
-    const match = pool.find(u => u.credential.toLowerCase() === cred.toLowerCase() && u.password === p);
-
-    if (!match) {
-      showLoginErr('Incorrect credentials. Try the demo login shown below the form.');
-      return;
+  try {
+    // Supabase signs in with an EMAIL, so an Admin ID is first translated
+    // to the admin's email by the get_login_email() SQL function.
+    let email = cred.toLowerCase();
+    if (loginMode === 'admin') {
+      const { data, error } = await sb.rpc('get_login_email', { p_member_id: cred.toUpperCase() });
+      if (error) throw error;
+      if (!data) { logFailedLogin(cred, 'admin id not found'); showLoginErr('Admin ID not found.'); return; }
+      email = data;
     }
 
-    loggedInUser = match;
-    enterApp();
-  }, 800);
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: p });
+    if (error) {
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        logFailedLogin(cred, 'email not confirmed');
+        pendingConfirmEmail = email;
+        showLoginErrHtml('Please confirm your email first — open the link we sent to your inbox (check Spam too).<br><a style="font-weight:700;cursor:pointer;text-decoration:underline;" onclick="resendConfirmation()">Resend confirmation email</a>');
+        return;
+      }
+      if (error.message.toLowerCase().includes('invalid login credentials')) logFailedLogin(cred, 'wrong password');
+      showLoginErr(friendlyAuthError(error));
+      return;
+    }
+    await startSession(data.user, loginMode);
+  } catch (e) {
+    showLoginErr(friendlyAuthError(e));
+  } finally {
+    btn.textContent = origText; btn.disabled = false;
+  }
+}
+
+async function resendConfirmation() {
+  if (!pendingConfirmEmail) return;
+  const { error } = await sb.auth.resend({
+    type: 'signup',
+    email: pendingConfirmEmail,
+    options: { emailRedirectTo: EMAIL_LINK_URL }
+  });
+  if (error) showLoginErr(friendlyAuthError(error));
+  else showToast(`Confirmation email re-sent to ${pendingConfirmEmail}.`, 'success', 5000);
 }
 
 function enterApp() {
   document.getElementById('login-page').style.display = 'none';
+  document.getElementById('register-page').style.display = 'none';
+  const first = loggedInUser.name.split(' ')[0];
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
   if (currentRole === 'admin') {
     document.getElementById('admin-app').style.display = 'flex';
     document.getElementById('a-date').textContent = todayStr();
-    setupAdminBot();
-    renderMembersTable();
+    setText('a-user-av', loggedInUser.initials);
+    setText('a-tb-av', loggedInUser.initials);
+    setText('a-user-name', loggedInUser.name);
+    setText('a-user-id', loggedInUser.id);
+    setText('a-welcome-name', `${greeting()}, ${first}! 👋`);
+    loadAdminData();
   } else {
     document.getElementById('member-app').style.display = 'flex';
     document.getElementById('m-today').textContent = todayStr();
-    document.getElementById('m-welcome-name').textContent = `Hi, ${loggedInUser.name.split(' ')[0]}! 👋`;
-    document.getElementById('m-user-name').textContent = loggedInUser.name;
-    document.getElementById('m-user-id').textContent = loggedInUser.id;
-    document.getElementById('m-user-av').textContent = loggedInUser.initials;
-    setupMemberBot();
-    startCountdown();
-    renderMemberCerts();
+    setText('m-welcome-name', `Hi, ${first}! 👋`);
+    setText('m-user-name', loggedInUser.name);
+    setText('m-user-id', loggedInUser.id);
+    setText('m-user-av', loggedInUser.initials);
+    setText('m-tb-av', loggedInUser.initials);
+    setText('m-prof-av', loggedInUser.initials);
+    setText('m-prof-name', loggedInUser.name);
+    setText('m-prof-id', loggedInUser.id);
+    setText('m-prof-fullname', loggedInUser.name);
+    setText('m-prof-email', loggedInUser.email);
+    setText('m-prof-province', loggedInUser.province || '—');
+    setText('m-prof-company', loggedInUser.company || '—');
+    loadMemberData();
   }
-  showToast(`Welcome back, ${loggedInUser.name.split(' ')[0]}!`, 'success');
+  showToast(`Welcome back, ${first}!`, 'success');
+}
+
+function greeting() {
+  const h = Number(new Date().toLocaleString('en-PH', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' }));
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
 function showLoginErr(msg) {
   const el = document.getElementById('login-err');
   el.textContent = msg; el.style.display = 'block';
+  showLoginOk('');
+}
+function showLoginOk(msg) {
+  const el = document.getElementById('login-ok'); if (!el) return;
+  el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none';
+}
+function showLoginErrHtml(html) {
+  const el = document.getElementById('login-err');
+  el.innerHTML = html; el.style.display = 'block';
 }
 
 function switchToLogin() {
+  const hadUser = !!loggedInUser;
+  (async () => {
+    if (hadUser) await logSignOut();          // needs the session, so it runs first
+    await sb.auth.signOut();
+  })().catch(e => console.error('[Supabase] sign-out failed', e));
+
   document.getElementById('member-app').style.display = 'none';
   document.getElementById('admin-app').style.display = 'none';
   document.getElementById('register-page').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
-  botOpen = false;
-  document.getElementById('bot-panel').classList.remove('open');
+  resetBot();
+  stopCountdown();
   loggedInUser = null;
-  // BACKEND HOOK: also call POST /api/auth/logout and clear authToken here.
+  memberData = null;
+  memberPayments = null;
+  adminData = null;
+  adminMe = null;
+  adminMembers = null;
+  closeActMenu();
 
   currentRole = 'member';
   const credEl = document.getElementById('l-cred');
@@ -285,13 +490,127 @@ function todayStr() {
   return new Date().toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 }
 
+// ════════════════════════════════════════════════
+// FORGOT PASSWORD
+// Step 1: user enters email (or Admin ID) → Supabase emails a reset link
+// Step 2: link opens this page → "Set a new password" modal → updateUser()
+// ════════════════════════════════════════════════
 function handleForgotPassword() {
-  // BACKEND HOOK: POST /api/auth/forgot-password { email }
-  showToast('Password reset link sent to your registered email.', 'success');
+  const typed = document.getElementById('l-cred').value.trim();
+  document.getElementById('fp-email').value = typed;
+  const msg = document.getElementById('fp-msg');
+  msg.style.display = 'none';
+  openMo('forgot-modal');
+  setTimeout(() => document.getElementById('fp-email').focus(), 50);
 }
-function handleLinkedInLogin() {
-  // BACKEND HOOK: kick off OAuth flow, e.g. window.location = '/api/auth/linkedin'
-  showToast('Redirecting to LinkedIn sign-in...', 'info');
+
+function showFpMsg(text, ok) {
+  const msg = document.getElementById('fp-msg');
+  msg.textContent = text;
+  msg.style.background = ok ? 'var(--green-l, #E8F5E9)' : 'var(--red-l)';
+  msg.style.color      = ok ? 'var(--green, #2E7D32)'   : 'var(--red-d)';
+  msg.style.display = 'block';
+}
+
+function maskEmail(email) {
+  const [u, d] = email.split('@');
+  return (u.length <= 2 ? u[0] + '*' : u.slice(0, 2) + '*'.repeat(Math.max(1, u.length - 2))) + '@' + d;
+}
+
+// Finds the REGISTERED email of the account (07_password_reset.sql).
+// Falls back to the older lookups if 07 has not been run yet.
+async function findResetTarget(input) {
+  const { data, error } = await sb.rpc('password_reset_target', { p_identifier: input });
+  if (!error && data) return data;
+  if (isAdminId(input)) {
+    const r = await sb.rpc('get_login_email', { p_member_id: input.toUpperCase() });
+    if (r.error) throw r.error;
+    return r.data ? { found: true, admin_id: true, email: r.data } : { found: false, admin_id: true };
+  }
+  const r = await sb.rpc('email_status', { p_email: input.toLowerCase() });
+  return { found: r.error ? true : r.data !== 'none', admin_id: false, email: input.toLowerCase() };
+}
+
+let resetCooldownUntil = 0;
+function startResetCooldown(btn) {
+  resetCooldownUntil = Date.now() + 60000;
+  const tick = () => {
+    const left = Math.ceil((resetCooldownUntil - Date.now()) / 1000);
+    if (left <= 0) { btn.disabled = false; btn.textContent = 'Send reset link'; return; }
+    btn.disabled = true; btn.textContent = `Resend in ${left}s`;
+    setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+async function sendResetLink() {
+  const input = document.getElementById('fp-email').value.trim();
+  const btn = document.getElementById('fp-btn');
+  if (!input) { showFpMsg('Please enter your registered email address or Admin ID.', false); return; }
+  if (!isAdminId(input) && !EMAIL_REGEX.test(input.toLowerCase())) {
+    showFpMsg('Enter the email address you registered with (members), or your Admin ID in the format ADM-YYYY-NNNN (admins).', false);
+    return;
+  }
+  if (Date.now() < resetCooldownUntil) return;
+
+  btn.disabled = true; btn.textContent = 'Sending...';
+  let sent = false;
+  try {
+    const target = await findResetTarget(input);
+    if (!target.found) {
+      showFpMsg(target.admin_id ? 'That Admin ID was not found. Check the format ADM-YYYY-NNNN.'
+                                : 'No account is registered with this email. Check the spelling, or create an account.', false);
+      return;
+    }
+    if (target.archived) {
+      showFpMsg('This account has been archived, so its password can\'t be reset. Please contact an HR Calabarzon admin.', false);
+      return;
+    }
+
+    const { error } = await sb.auth.resetPasswordForEmail(target.email, { redirectTo: EMAIL_LINK_URL });
+    if (error) { showFpMsg(friendlyAuthError(error), false); return; }
+
+    sent = true;
+    const shown = target.admin_id ? maskEmail(target.email) : target.email;
+    showFpMsg(`✓ A reset link was sent to the registered email ${shown}. Open the email and click the link to set a new password (check Spam/Promotions too). The link works once and expires after 1 hour.`, true);
+    startResetCooldown(btn);
+  } catch (e) {
+    showFpMsg(friendlyAuthError(e), false);
+  } finally {
+    if (!sent) { btn.disabled = false; btn.textContent = 'Send reset link'; }
+  }
+}
+
+function openResetModal() {
+  document.getElementById('rp-msg').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('member-app').style.display = 'none';
+  document.getElementById('admin-app').style.display = 'none';
+  openMo('reset-modal');
+}
+
+async function saveNewPassword() {
+  const p1 = document.getElementById('rp-pass').value;
+  const p2 = document.getElementById('rp-pass2').value;
+  const msg = document.getElementById('rp-msg');
+  const btn = document.getElementById('rp-btn');
+  msg.style.display = 'none';
+  const fail = t => { msg.textContent = t; msg.style.display = 'block'; };
+
+  if (p1.length < 6) return fail('Password must be at least 6 characters.');
+  if (p1 !== p2)     return fail('Passwords do not match.');
+
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  btn.disabled = false; btn.textContent = 'Save new password';
+  if (error) return fail(friendlyAuthError(error));
+
+  await sb.auth.signOut();
+  document.getElementById('rp-pass').value = '';
+  document.getElementById('rp-pass2').value = '';
+  closeMo('reset-modal');
+  cleanUrl();
+  showToast('Password updated! Sign in with your new password.', 'success', 5000);
 }
 
 // ════════════════════════════════════════════════
@@ -312,9 +631,10 @@ function showRegisterErr(msg) {
   const el = document.getElementById('register-err');
   el.textContent = msg; el.style.display = 'block';
 }
-function handleRegister() {
+
+async function handleRegister() {
   const fullName    = document.getElementById('r-fullname').value.trim();
-  const email       = document.getElementById('r-email').value.trim();
+  const email       = document.getElementById('r-email').value.trim().toLowerCase();
   const pass        = document.getElementById('r-pass').value;
   const pass2       = document.getElementById('r-pass2').value;
   const province    = document.getElementById('r-province').value;
@@ -328,68 +648,127 @@ function handleRegister() {
     showRegisterErr('Please fill in all fields.');
     return;
   }
-  if (!email.includes('@')) {
-    showRegisterErr('Please enter a valid email address.');
-    return;
-  }
-  if (pass.length < 6) {
-    showRegisterErr('Password must be at least 6 characters.');
-    return;
-  }
-  if (pass !== pass2) {
-    showRegisterErr('Passwords do not match.');
-    return;
-  }
+  if (pass.length < 6) { showRegisterErr('Password must be at least 6 characters.'); return; }
+  if (pass !== pass2)  { showRegisterErr('Passwords do not match.'); return; }
 
   const btn = document.getElementById('register-btn');
   const origText = btn.textContent;
-  btn.textContent = 'Creating account...'; btn.disabled = true;
+  btn.textContent = 'Checking email...'; btn.disabled = true;
 
-  // ──────────────────────────────────────────────
-  // BACKEND HOOK: replace this whole block with a real registration call:
-  //
-  //   apiRequest('/auth/register', {
-  //     method: 'POST',
-  //     body: JSON.stringify({ fullName, email, password: pass, province, company, department, position })
-  //   }).then(() => {
-  //     showLoginPage();
-  //     showToast('Account created! Sign in to continue.', 'success');
-  //   }).catch(() => showRegisterErr('Registration failed. Please try again.'));
-  //
-  // For now we just simulate a short delay and add the new account to the
-  // in-memory DUMMY_USERS table so it could (in a real backend) be used to
-  // log in immediately after.
-  // ──────────────────────────────────────────────
-  setTimeout(() => {
-    btn.textContent = origText; btn.disabled = false;
+  try {
+    const check = await validateEmail(email, { checkDuplicate: true });
+    if (!check.ok) { showRegisterErr(check.msg); return; }
 
-    DUMMY_USERS.members.push({
-      credential: email,
+    btn.textContent = 'Creating account...';
+
+    // Creates the user in Authentication → Users and sends the confirmation email.
+    // The extra fields go into user metadata; the SQL trigger copies them
+    // into public.profiles and assigns a member ID (HRC-YYYY-NNNN).
+    const { data, error } = await sb.auth.signUp({
+      email,
       password: pass,
-      id: `HRC-2025-${String(1000 + DUMMY_USERS.members.length)}`,
-      name: fullName,
-      initials: fullName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'ME'
+      options: {
+        emailRedirectTo: EMAIL_LINK_URL,
+        data: { full_name: fullName, province, company, department, position }
+      }
     });
+    if (error) { showRegisterErr(friendlyAuthError(error)); return; }
+
+    // Supabase hides duplicates by returning a user with no identities
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      showRegisterErr('This email is already registered. Sign in instead, or use "Forgot password?".');
+      return;
+    }
+
+    if (data.session) {
+      // "Confirm email" is switched OFF in Supabase, so nobody verifies the address.
+      console.warn('Supabase "Confirm email" is disabled — fake emails can register. Turn it on in Authentication → Sign In / Providers → Email.');
+      await sb.auth.signOut();
+    }
 
     ['r-fullname','r-email','r-pass','r-pass2','r-company','r-department','r-position'].forEach(id => {
       document.getElementById(id).value = '';
     });
     document.getElementById('r-province').value = '';
+    clearEmailHint();
 
     showLoginPage();
-    showToast(`Account created! Sign in as ${fullName.split(' ')[0]} to continue.`, 'success', 4000);
-  }, 900);
+    document.getElementById('l-cred').value = email;
+    detectCredential(email);
+    showToast(`Account created! We sent a confirmation link to ${email}. Click it, then sign in.`, 'success', 7000);
+  } catch (e) {
+    showRegisterErr(friendlyAuthError(e));
+  } finally {
+    btn.textContent = origText; btn.disabled = false;
+  }
 }
+
+// ════════════════════════════════════════════════
+// AUTH STARTUP
+// Restores a logged-in session, and handles people arriving
+// from the "confirm email" or "reset password" links.
+// ════════════════════════════════════════════════
+sb.auth.onAuthStateChange((event) => {
+  // Keep this callback synchronous (Supabase recommendation)
+  if (event === 'PASSWORD_RECOVERY') openResetModal();
+});
+
+(async function initAuth() {
+  // Registration link shared by an admin: …/index.html#register
+  if (window.location.hash === '#register') {
+    cleanUrl();
+    showRegisterPage();
+  }
+  if (ARRIVED_FROM.error) {
+    showToast(/expired|invalid/i.test(ARRIVED_FROM.error)
+      ? 'That link has expired or was already used. If you were confirming your email, try signing in — you can request a new confirmation link there. For a password reset, use "Forgot password?" again.'
+      : `Link problem: ${ARRIVED_FROM.error}. Request a new link.`, 'error', 8000);
+    cleanUrl();
+    return;
+  }
+  const { data: { session } } = await sb.auth.getSession();
+
+  if (ARRIVED_FROM.type === 'recovery') { openResetModal(); return; }
+
+  // Confirmation link from the sign-up email: Supabase has already confirmed the
+  // account at this point. Don't log them in automatically — send them to our
+  // login page with their email filled in so they sign in themselves.
+  if (ARRIVED_FROM.type === 'signup' || ARRIVED_FROM.type === 'email') {
+    const email = session?.user?.email || '';
+    if (session) await sb.auth.signOut({ scope: 'local' });
+    cleanUrl();
+    showLoginPage();
+    if (email) { document.getElementById('l-cred').value = email; detectCredential(email); }
+    showLoginOk('✅ Your email is confirmed! Your account is now active — sign in with your email and password.');
+    setTimeout(() => document.getElementById('l-pass')?.focus(), 100);
+    return;
+  }
+
+  if (session) {
+    try {
+      await startSession(session.user, null);
+      if (ARRIVED_FROM.type === 'signup') showToast('Email confirmed — your account is active! 🎉', 'success', 5000);
+      if (ARRIVED_FROM.type === 'email_change') showToast('Your email address was updated. Use it the next time you sign in.', 'success', 6000);
+      if (ARRIVED_FROM.message) showToast(ARRIVED_FROM.message, 'info', 8000);
+    } catch (e) {
+      console.error(e);
+      showLoginErr(friendlyAuthError(e));
+    }
+  }
+  if (ARRIVED_FROM.type || ARRIVED_FROM.message) cleanUrl();
+})();
 
 // ════════════════════════════════════════════════
 // MEMBER NAVIGATION
 // ════════════════════════════════════════════════
 function mShowPage(p) {
+  // Career Path now lives inside Session and Attendance (its own tab)
   document.querySelectorAll('#member-app .page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('#member-app .nav-item').forEach(x=>x.classList.remove('active'));
   document.getElementById('mp-'+p).classList.add('active');
   const n=document.getElementById('mn-'+p); if(n) n.classList.add('active');
-  const t={home:'Dashboard',career:'Career Path',attendance:'Attendance & Sessions',certificates:'Certificates',profile:'My Profile'};
+  if (p === 'career') renderSkillTree();
+  const t={home:'Dashboard',attendance:'Session and Attendance',career:'Career Path',payments:'Payment',certificates:'Certificate',profile:'My Profile'};
   document.getElementById('m-page-title').textContent = t[p]||p;
   window.scrollTo(0,0);
 }
@@ -398,18 +777,22 @@ function mShowPage(p) {
 // ADMIN NAVIGATION
 // ════════════════════════════════════════════════
 function aShowPage(p) {
+  // Dashboard and Analytics are one page now: "analytics" opens it at the charts
+  if (p === 'analytics') { aShowPage('home'); setTimeout(() => document.getElementById('a-analytics-section')?.scrollIntoView({ behavior: 'smooth' }), 30); return; }
   document.querySelectorAll('#admin-app .page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('#admin-app .nav-item').forEach(x=>x.classList.remove('active'));
   document.getElementById('ap-'+p).classList.add('active');
   const n=document.getElementById('an-'+p); if(n) n.classList.add('active');
-  const t={home:'Admin Dashboard',analytics:'AI Analytics',members:'Data Management',sessions:'Session Creation',attendance:'Attendance Management',payments:'Payment Management'};
+  closeActMenu();
+  const t={home:'Analytic Dashboard',members:'Data Management',sessions:'Session and Attendance',attendance:'Certificate',payments:'Payment',profile:'My Profile'};
   document.getElementById('a-page-title').textContent = t[p]||p;
   window.scrollTo(0,0);
 }
 function aSwitchTab(btn, panelId) {
   btn.closest('.pill-tabs').querySelectorAll('.pt').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  document.querySelectorAll('.apanel').forEach(p=>{
+  const page = btn.closest('.page');
+  (page || document).querySelectorAll('.apanel').forEach(p=>{
     p.classList.toggle('active', p.id===panelId);
   });
 }
@@ -425,332 +808,2483 @@ document.addEventListener('click', e => {
 });
 
 // ════════════════════════════════════════════════
-// MEMBER: render certificates grid from certData
+// FORMAT HELPERS
+// All dates are shown in Philippine time.
 // ════════════════════════════════════════════════
-function renderMemberCerts() {
-  const grid = document.getElementById('m-cert-grid');
-  if (!grid) return;
-  grid.innerHTML = certData.map((c, i) => `
-    <div class="card m-cc" onclick="openMCert(${i})">
-      <div class="m-cthumb" style="background:${c.bg};">
-        <div class="m-cthi">
-          <div style="font-size:26px;margin-bottom:5px;">${c.seal}</div>
-          <div class="m-ctit">${c.title}</div>
-        </div>
-      </div>
-      <div class="m-cbody">
-        <h4>${c.short}</h4>
-        <p>${c.dateShort} · ${c.accShort}</p>
-        <div class="vbadge">✅ Verified</div>
-      </div>
-    </div>
-  `).join('');
+const TZ = 'Asia/Manila';
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+function setHtml(id, v) { const el = document.getElementById(id); if (el) el.innerHTML = v; }
+function fmtInt(n) { return Number(n || 0).toLocaleString('en-PH'); }
+function fmtMoney(n) { return '₱' + Number(n || 0).toLocaleString('en-PH', { maximumFractionDigits: 2 }); }
+function fmtCompact(n) {
+  n = Number(n || 0);
+  if (n < 1000) return String(n);
+  return (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k+';
+}
+function fmtDate(iso)      { return iso ? new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: TZ }) : '—'; }
+function fmtDateLong(iso)  { return iso ? new Date(iso).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric', timeZone: TZ }) : '—'; }
+function fmtDateShort(iso) { return iso ? new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: TZ }) : '—'; }
+function fmtTime(iso)      { return iso ? new Date(iso).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: TZ }) : ''; }
+function fmtMonth(iso)     { return new Date(iso).toLocaleDateString('en-PH', { month: 'long', timeZone: TZ }); }
+function fmtPct(n)         { return n === null || n === undefined ? '—' : Math.round(Number(n)) + '%'; }
+// yyyy-mm-dd and hh:mm of a timestamp, in Philippine time (for form inputs)
+function manilaParts(iso) {
+  const d = new Date(iso);
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+    .formatToParts(d).map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour === '24' ? '00' : p.hour}:${p.minute}` };
+}
+function initialsOf(name) {
+  return (name || '').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+}
+function emptyState(icon, text) {
+  return `<div style="padding:18px 10px;text-align:center;color:var(--t3);font-size:13px;line-height:1.6;"><div style="font-size:22px;margin-bottom:4px;">${icon}</div>${text}</div>`;
+}
+function emptyRow(cols, text) {
+  return `<tr><td colspan="${cols}" style="text-align:center;color:var(--t3);padding:20px;font-size:13px;">${text}</td></tr>`;
 }
 
-function openMCert(i) {
-  const c=certData[i];
-  document.getElementById('m-cd-prev').style.background=c.bg;
-  document.getElementById('m-cd-seal').textContent=c.seal;
-  document.getElementById('m-cd-title').textContent=c.title;
-  document.getElementById('m-cd-meta').textContent=c.title;
-  document.getElementById('m-cd-date').textContent=c.date;
-  document.getElementById('m-cd-acc').textContent=c.acc;
-  document.getElementById('m-cert-detail').classList.add('open');
+const AREA_STYLE = {
+  'Recruitment':               { short: 'Recruitment', badge: 'bg-t', color: 'var(--teal)',   light: 'var(--teal-l)',   grad: 'linear-gradient(135deg,#1565C0,#0D47A1)', seal: '🏆' },
+  'Compliance':                { short: 'Compliance',  badge: 'bg-r', color: 'var(--red)',    light: 'var(--red-l)',    grad: 'linear-gradient(135deg,#B71C1C,#E53935)', seal: '🏅' },
+  'Learning and Development':  { short: 'L&D',         badge: 'bg-g', color: 'var(--green)',  light: 'var(--green-l)',  grad: 'linear-gradient(135deg,#1B5E20,#2E7D32)', seal: '🎓' },
+  'HRIS':                      { short: 'HRIS',        badge: 'bg-b', color: 'var(--blue)',   light: 'var(--blue-l)',   grad: 'linear-gradient(135deg,#0D47A1,#1976D2)', seal: '💻' },
+  'Compensation and Benefits': { short: 'Comp & Ben',  badge: 'bg-p', color: 'var(--purple)', light: 'var(--purple-l)', grad: 'linear-gradient(135deg,#4A148C,#6A1B9A)', seal: '⭐' },
+  'Labor Relations':           { short: 'Labor Rel.',  badge: 'bg-y', color: '#B45309',       light: 'var(--yellow-l)', grad: 'linear-gradient(135deg,#E65100,#F57C00)', seal: '🤝' }
+};
+function areaStyle(a) { return AREA_STYLE[a] || { short: a || '—', badge: 'bg-gr', color: 'var(--t2)', light: 'var(--bg)', grad: 'linear-gradient(135deg,#37474F,#546E7A)', seal: '🏆' }; }
+function areaBadge(a) { return a ? `<span class="badge ${areaStyle(a).badge}">${esc(areaStyle(a).short)}</span>` : '—'; }
+
+async function rpc(name, args) {
+  const { data, error } = await sb.rpc(name, args);
+  if (error) throw error;
+  return data;
 }
-function handleDownloadCert() {
-  // BACKEND HOOK: GET /api/certificates/:id/download (returns a PDF stream)
-  showToast('📥 Downloading certificate PDF...', 'info');
-}
-function handleShareLinkedIn() {
-  // BACKEND HOOK: open LinkedIn's share intent URL with the cert's public link
-  showToast('🔗 Opening LinkedIn share dialog...', 'info');
-}
-function claimCertificate(btn) {
-  // BACKEND HOOK: POST /api/certificates/claim { sessionId }
-  btn.outerHTML = '<span class="badge bg-g">✓ Claimed</span>';
-  showToast('Certificate claimed! Check the Certificates page.', 'success');
+function sessionIsLive(s) { const n = Date.now(); return new Date(s.start) <= n && n < new Date(s.end); }
+
+// ════════════════════════════════════════════════
+// LOGIN PAGE NUMBERS
+// ════════════════════════════════════════════════
+async function loadPublicStats() {
+  try {
+    const s = await rpc('public_stats');
+    setText('lh-stat-members', fmtCompact(s.members));
+    setText('lh-stat-provinces', s.provinces);
+    setText('lh-stat-tracks', s.tracks);
+  } catch (e) {
+    console.error('[Supabase] public_stats failed — did you run 05_live_data.sql?', e);
+  }
 }
 
 // ════════════════════════════════════════════════
-// MEMBER: skill tree node modal + filters
+// STATE FOR LOADED DATA
 // ════════════════════════════════════════════════
-function openNodeMo(state, title, desc, date) {
-  const icons={done:'✅',active:'🟡',locked:'🔒'};
-  document.getElementById('m-ni-icon').textContent=icons[state];
-  document.getElementById('m-ni-title').textContent=title;
-  document.getElementById('m-ni-body').textContent=desc;
-  const btn=document.getElementById('m-ni-btn');
-  const prog=document.getElementById('m-ni-prog');
-  if(state==='locked'){
-    prog.innerHTML='<div class="prog"><div class="prog-f" style="width:72%;background:var(--red);"></div></div><div style="font-size:12px;color:var(--t3);margin-top:5px;">72% · Need 80% to unlock</div>';
-    btn.textContent='Find Sessions to Unlock';
-    btn.onclick=()=>{closeMo('m-node-modal');mShowPage('attendance');};
-  } else if(state==='done'){
-    prog.innerHTML=`<div style="font-size:12px;color:var(--green);font-weight:600;">✅ Completed on ${date}</div>`;
-    btn.textContent='View Certificate';
-    btn.onclick=()=>{closeMo('m-node-modal');mShowPage('certificates');};
+let memberData = null;     // result of member_dashboard()
+let adminData  = null;     // result of admin_dashboard()
+let countdownTimer = null;
+let skillTreeArea = 'all';
+let aMembersPage = 1;
+const MEMBERS_PER_PAGE = 20;
+let editingSessionId = null;
+let openCertificate = null;
+let adminMe = null;          // result of admin_whoami()   (06_member_management.sql)
+let adminMembers = null;     // result of admin_members()  (06_member_management.sql)
+let archiveTargetId = null;
+
+// ════════════════════════════════════════════════
+// MEMBER: load + render
+// ════════════════════════════════════════════════
+async function loadMemberData() {
+  lastDataLoad = Date.now();
+  try {
+    memberData = await rpc('member_dashboard');
+  } catch (e) {
+    memberData = null;
+    console.error('[Supabase] member_dashboard failed:', e);
+    showToast('Could not load your dashboard data. ' + friendlyAuthError(e), 'error', 6000);
+  }
+  renderMemberAll();
+}
+function renderMemberAll() {
+  renderMemberHome();
+  renderSkillTree();
+  fillMemberFilters();
+  renderMemberAttendance();
+  renderMemberCerts();
+  renderMemberProfile();
+  startCountdown();
+  setupMemberBot();
+  updateMemberBadges();
+  loadMemberPayments();
+}
+function md() {
+  return memberData || { me: {}, stats: {}, upcoming: [], history: [], certificates: [], skill_tree: [], rankings: [], areas: [] };
+}
+// The session a member should see first: next one they registered for, else the next open one
+function memberNextSession() {
+  const up = md().upcoming || [];
+  return up.find(s => s.is_registered) || up[0] || null;
+}
+function sessionsNeededFor80(attended, missed) {
+  const n = Math.ceil((0.8 * (attended + missed) - attended) / 0.2);
+  return Math.max(n, 0);
+}
+
+function renderMemberHome() {
+  const d = md(), st = d.stats || {}, me = d.me || {};
+  const attended = Number(st.attended || 0), missed = Number(st.missed || 0);
+  const hasAttendance = attended + missed > 0;
+  const rate = hasAttendance ? Number(st.rate || 0) : null;
+
+
+  // attendance ring
+  const ring = document.getElementById('m-att-ring');
+  if (ring) ring.setAttribute('stroke-dashoffset', String(213 * (1 - (rate || 0) / 100)));
+  setText('m-att-ring-text', fmtPct(rate));
+  setText('m-att-pct', fmtPct(rate));
+  const bar = document.getElementById('m-att-bar'); if (bar) bar.style.width = (rate || 0) + '%';
+  const warn = document.getElementById('m-att-warn');
+  if (warn) {
+    if (!hasAttendance) { warn.style.display = 'block'; warn.style.color = 'var(--t3)'; warn.textContent = 'No completed sessions yet'; }
+    else if (rate < 80) { const n = sessionsNeededFor80(attended, missed); warn.style.display = 'block'; warn.style.color = ''; warn.textContent = `⚠ ${n} more session${n === 1 ? '' : 's'} needed`; }
+    else { warn.style.display = 'block'; warn.style.color = 'var(--green)'; warn.textContent = '✓ Goal reached'; }
+  }
+
+  // province rankings
+  const ranks = (d.rankings || []).slice(0, 3);
+  const medal = ['⭐ #1', '🥈 #2', '🥉 #3'];
+  setHtml('m-rankings', ranks.length ? ranks.map((r, i) => `
+    <div class="rank-item"><div class="rnum r${i + 1}">${i + 1}</div><div class="ri"><h4>${esc(r.province)}</h4><p>${r.top_area ? esc(areaStyle(r.top_area).short) + ' · ' : ''}${fmtInt(r.members)} member${r.members == 1 ? '' : 's'}</p></div><div class="rs">${medal[i]}</div></div>`).join('')
+    : emptyState('📍', 'No province data yet.'));
+
+  // career path summary
+  const nodes = d.skill_tree || [];
+  const done = nodes.filter(n => n.status === 'COMPLETED');
+  const active = nodes.filter(n => n.status === 'IN_PROGRESS');
+  const areasWithNodes = [...new Set(nodes.map(n => n.area))];
+  const activeAreas = new Set([...done, ...active].map(n => n.area));
+  setText('m-cp-level', (me.mastery_level || '—').toUpperCase());
+  setText('m-cp-tracks', nodes.length ? `${activeAreas.size} of ${areasWithNodes.length} tracks active` : 'No tracks yet');
+  const preview = [...done.slice(0, 1), ...active.slice(0, 1), ...nodes.filter(n => n.status === 'LOCKED').slice(0, 3)].slice(0, 3);
+  setHtml('m-cp-list', preview.length ? preview.map(n => {
+    const cls = n.status === 'COMPLETED' ? 'md-done' : n.status === 'IN_PROGRESS' ? 'md-active' : 'md-lock';
+    const right = n.status === 'COMPLETED' ? '✓' : n.status === 'IN_PROGRESS' ? Math.round(n.progress) + '%' : '🔒';
+    const anim = n.status === 'IN_PROGRESS' ? ' style="animation:pulse 1.8s ease-in-out infinite;"' : '';
+    return `<div class="m-mr"><div class="m-md ${cls}"${anim}></div><div class="m-ml">${esc(n.title)}</div><div class="m-mp">${right}</div></div>`;
+  }).join('') : emptyState('🗺', 'Your career path will appear here once it is set up.'));
+  const pct = nodes.length ? Math.round(100 * done.length / nodes.length) : 0;
+  const cpBar = document.getElementById('m-cp-bar'); if (cpBar) cpBar.style.width = pct + '%';
+  setText('m-cp-note', nodes.length ? `${pct}% of career path completed` : '—');
+
+  // upcoming sessions
+  const next = memberNextSession();
+  const upcoming = d.upcoming || [];
+  if (next) {
+    const s = next, a = areaStyle(s.area);
+    setHtml('m-home-next', `
+      <div class="stag ${sessionIsLive(s) ? 't-live' : 't-up'}">${sessionIsLive(s) ? '🔴 Live now' : (s.is_registered ? '🕒 Next Up · Registered' : '🕒 Next Up')}</div>
+      <div class="m-stitle">${esc(s.title)}</div>
+      <div class="m-smeta"><span>📋 ${esc(a.short)}</span><span>👤 ${esc(s.speaker)}</span></div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:5px;">${fmtDate(s.start)} · ${fmtTime(s.start)} · Starts in:</div>
+      <div class="cdb">
+        <div class="cdu"><div class="cdn" id="m-hh">--</div><div class="cdl">Hrs</div></div>
+        <div class="cdu"><div class="cdn" id="m-hm">--</div><div class="cdl">Min</div></div>
+        <div class="cdu"><div class="cdn" id="m-hs">--</div><div class="cdl">Sec</div></div>
+      </div>
+      <button class="btn btn-disabled btn-sm" id="m-join-home" onclick="openJoinModal('${esc(s.session_id)}')">Join Now (Soon)</button>`);
   } else {
-    prog.innerHTML='<div class="prog"><div class="prog-f" style="width:72%;background:var(--yellow);"></div></div><div style="font-size:12px;color:var(--t3);margin-top:5px;">72% · 2 more sessions needed</div>';
-    btn.textContent='Join Next Session';
-    btn.onclick=()=>{closeMo('m-node-modal');mShowPage('attendance');};
+    setHtml('m-home-next', emptyState('📅', 'No upcoming sessions yet. New sessions will appear here once an admin publishes them.'));
+  }
+  const others = upcoming.filter(s => !next || s.session_id !== next.session_id).slice(0, 2);
+  setHtml('m-home-upcoming', others.map(s => `
+    <div class="m-sm" style="cursor:pointer;" title="View session" onclick="openSessionView('${esc(s.session_id)}')"><div class="m-smd"></div><div><div class="m-smt">${esc(s.title)}</div><div class="m-smm">${fmtDateShort(s.start)} · ${fmtTime(s.start)}${s.type ? ' · ' + esc(s.type) : ''}${s.is_registered ? ' · ✓ Registered' : ''}</div></div></div>`).join(''));
+
+  setHtml('m-home-recs', renderRecCards(recommendedSessions(3), 'No open sessions to recommend right now.'));
+
+  // stat row
+  setText('m-st-attended', memberData ? fmtInt(attended) : '—');
+  setText('m-st-level', me.mastery_level ? '🏅 ' + me.mastery_level : '—');
+  setText('m-st-certs', memberData ? fmtInt(st.certificates) : '—');
+  const rk = st.province_rank;
+  setText('m-st-rank', rk && rk.rank ? '#' + rk.rank : '—');
+  setText('m-st-rank-lbl', me.province ? `${me.province} Ranking` : 'Province Ranking');
+}
+
+// Upcoming sessions the member hasn't registered for; their own area first
+function recommendedSessions(limit, filterFn) {
+  const d = md(), mine = (d.me || {}).expertise;
+  let list = (d.upcoming || []).filter(s => !s.is_registered);
+  if (filterFn) list = list.filter(filterFn);
+  list.sort((a, b) => (b.area === mine) - (a.area === mine) || new Date(a.start) - new Date(b.start));
+  return list.slice(0, limit);
+}
+function renderRecCards(list, emptyText) {
+  if (!list.length) return emptyState('💡', emptyText);
+  return list.map(s => {
+    const a = areaStyle(s.area);
+    const full = s.capacity && s.registered_count >= s.capacity;
+    return `<div class="rec-card"><div class="rat" style="background:${a.light};color:${a.color};">${esc(a.short)}</div><div class="rtitle">${esc(s.title)}</div><div class="rmeta"><span>${fmtDateShort(s.start)}</span><span>${esc(s.duration)} min</span><span>${Number(s.fee) > 0 ? fmtMoney(s.fee) : 'Free'}</span></div>${full
+      ? '<span class="badge bg-gr" style="margin-top:7px;">Full</span>'
+      : ''}<button class="btn btn-outline btn-sm" style="margin-top:7px;font-size:11px;" onclick="openSessionView('${esc(s.session_id)}')">👁 View</button></div>`;
+  }).join('');
+}
+
+// ── Skill tree (drawn from career_nodes + member_skill_progress) ──
+function renderSkillTree() {
+  const d = md(), me = d.me || {}, st = d.stats || {};
+  setText('m-car-level', (me.mastery_level || '—').toUpperCase());
+  setText('m-car-position', me.position || 'HR Practitioner');
+  const rk = st.province_rank;
+  setText('m-car-rank', me.province ? `${me.province}${rk && rk.rank ? ' · #' + rk.rank + ' Rank' : ''}` : '—');
+
+  const nodes = d.skill_tree || [];
+  const areas = [...new Set(nodes.map(n => n.area))];
+  if (skillTreeArea !== 'all' && !areas.includes(skillTreeArea)) skillTreeArea = 'all';
+  setHtml('m-tree-filters', nodes.length ? [`<div class="fchip ${skillTreeArea === 'all' ? 'active' : ''}" onclick="filterSkillTree('all')">All Areas</div>`]
+    .concat(areas.map(a => `<div class="fchip ${skillTreeArea === a ? 'active' : ''}" onclick="filterSkillTree('${esc(a)}')">${esc(areaStyle(a).short)}</div>`)).join('') : '');
+
+  if (!nodes.length) {
+    setHtml('m-skill-tree', emptyState('🗺', 'No career path nodes yet.<br>They appear here once an admin adds them to the <strong>career_nodes</strong> table.'));
+    return;
+  }
+  const W = 660, H = 460, cx = 330, cy = 230;
+  const font = `font-family="'Plus Jakarta Sans'"`;
+  let lines = '', groups = '';
+  areas.forEach((area, ai) => {
+    const angle = -Math.PI / 2 + ai * (2 * Math.PI / areas.length);
+    const list = nodes.map((n, i) => ({ n, i })).filter(x => x.n.area === area);
+    const step = Math.min(85, 175 / Math.max(list.length, 1));
+    const dim = skillTreeArea !== 'all' && skillTreeArea !== area;
+    list.forEach((x, j) => {
+      const dist = 118 + j * step;
+      const px = cx + Math.cos(angle) * dist * 1.45, py = cy + Math.sin(angle) * dist * 0.92;
+      const prevDist = j === 0 ? 34 : 118 + (j - 1) * step;
+      const lx = cx + Math.cos(angle) * prevDist * 1.45, ly = cy + Math.sin(angle) * prevDist * 0.92;
+      lines += `<line x1="${lx.toFixed(1)}" y1="${ly.toFixed(1)}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="#E0E0E0" stroke-width="2" stroke-dasharray="4,3" opacity="${dim ? .25 : 1}"/>`;
+      const n = x.n;
+      const done = n.status === 'COMPLETED', act = n.status === 'IN_PROGRESS';
+      const fill = done ? '#2E7D32' : act ? '#1976D2' : '#BDBDBD';
+      const txt = done || act ? 'white' : '#757575';
+      const words = String(n.title).split(' ');
+      let l1 = '', l2 = '';
+      words.forEach(w => { if ((l1 + ' ' + w).trim().length <= 12 && !l2) l1 = (l1 + ' ' + w).trim(); else l2 = (l2 + ' ' + w).trim(); });
+      if (l2.length > 12) l2 = l2.slice(0, 11) + '…';
+      const label = done ? `<text x="${px}" y="${py + 36}" text-anchor="middle" fill="#2E7D32" font-size="9" font-weight="700" ${font}>✓ Done</text>`
+        : act ? `<text x="${px}" y="${py + 36}" text-anchor="middle" fill="#1976D2" font-size="9" font-weight="700" ${font}>${Math.round(n.progress)}% →</text>`
+        : `<text x="${px}" y="${py + 40}" text-anchor="middle" fill="#9E9E9E" font-size="11">🔒</text>`;
+      groups += `<g style="cursor:pointer;" opacity="${dim ? .2 : 1}" onclick="openNodeMo(${x.i})">
+        <circle cx="${px}" cy="${py}" r="33" fill="${fill}" opacity=".15"/><circle cx="${px}" cy="${py}" r="25" fill="${fill}"${act ? ' style="animation:pulse 1.8s ease-in-out infinite;transform-origin:' + px + 'px ' + py + 'px;"' : ''}/>
+        <text x="${px}" y="${l2 ? py - 2 : py + 3}" text-anchor="middle" fill="${txt}" font-size="7" font-weight="700" ${font}>${esc(l1)}</text>${l2 ? `<text x="${px}" y="${py + 7}" text-anchor="middle" fill="${txt}" font-size="7" ${font}>${esc(l2)}</text>` : ''}
+        ${label}</g>`;
+    });
+    // area label at the end of each spoke
+    const ex = cx + Math.cos(angle) * 78, ey = cy + Math.sin(angle) * 58 + 3;
+    groups += `<text x="${ex}" y="${ey}" text-anchor="middle" fill="${areaStyle(area).color}" font-size="8" font-weight="700" opacity="${dim ? .25 : .9}" ${font}>${esc(areaStyle(area).short)}</text>`;
+  });
+  setHtml('m-skill-tree', `<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible;">
+    <circle cx="${cx}" cy="${cy}" r="40" fill="#1976D2" opacity=".13"/><circle cx="${cx}" cy="${cy}" r="28" fill="#1976D2" opacity=".22"/><circle cx="${cx}" cy="${cy}" r="20" fill="#1976D2"/>
+    <text x="${cx}" y="${cy - 4}" text-anchor="middle" fill="white" ${font} font-size="8" font-weight="800">MASTERY</text><text x="${cx}" y="${cy + 7}" text-anchor="middle" fill="white" ${font} font-size="7">HUB</text>
+    ${lines}${groups}</svg>`);
+}
+function filterSkillTree(area) {
+  skillTreeArea = area;
+  renderSkillTree();
+}
+function openNodeMo(i) {
+  const n = (md().skill_tree || [])[i]; if (!n) return;
+  const state = n.status === 'COMPLETED' ? 'done' : n.status === 'IN_PROGRESS' ? 'active' : 'locked';
+  setText('m-ni-icon', { done: '✅', active: '🟡', locked: '🔒' }[state]);
+  setText('m-ni-title', n.title);
+  const tier = n.tier ? ` · ${n.tier} tier` : '';
+  setText('m-ni-body', (n.description || 'No description yet.') + '');
+  const prog = document.getElementById('m-ni-prog');
+  const btn = document.getElementById('m-ni-btn');
+  const areaLine = `<div style="font-size:12px;color:var(--t3);margin-bottom:8px;">${esc(areaStyle(n.area).short)}${esc(tier)}${n.required > 1 ? ' · ' + n.required + ' sessions required' : ''}</div>`;
+  if (state === 'done') {
+    prog.innerHTML = areaLine + `<div style="font-size:12px;color:var(--green);font-weight:600;">✅ Completed on ${fmtDate(n.completed_at)}</div>`;
+    btn.textContent = 'View Certificates';
+    btn.onclick = () => { closeMo('m-node-modal'); mShowPage('certificates'); };
+  } else {
+    const p = Math.round(n.progress || 0);
+    const color = state === 'active' ? 'var(--yellow)' : 'var(--red)';
+    prog.innerHTML = areaLine + `<div class="prog"><div class="prog-f" style="width:${p}%;background:${color};"></div></div><div style="font-size:12px;color:var(--t3);margin-top:5px;">${p}% complete${state === 'locked' ? ' · Locked until prerequisites are met' : ''}</div>`;
+    btn.textContent = 'Find Sessions';
+    btn.onclick = () => { closeMo('m-node-modal'); mShowPage('attendance'); };
   }
   openMo('m-node-modal');
 }
-function filterSkillTree(chip, area) {
-  chip.closest('.m-tf').querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));
-  chip.classList.add('active');
-  // BACKEND HOOK: GET /api/members/:id/skill-tree?area=<area> and re-render the SVG nodes.
-  showToast(area === 'all' ? 'Showing all skill tree areas.' : `Filtered to ${area}.`, 'info', 1800);
+
+// ── Attendance page ──
+function fillMemberFilters() {
+  const sel = document.getElementById('m-hist-area');
+  if (sel && sel.options.length <= 1) {
+    (md().areas || []).forEach(a => sel.add(new Option(areaStyle(a).short, a)));
+  }
+  const certs = md().certificates || [];
+  const ySel = document.getElementById('m-cert-year');
+  if (ySel) {
+    const keep = ySel.value;
+    ySel.innerHTML = '<option value="">All Years</option>';
+    [...new Set(certs.map(c => new Date(c.issued_at).getFullYear()))].sort((a, b) => b - a).forEach(y => ySel.add(new Option(y, y)));
+    ySel.value = keep;
+  }
+  const aSel = document.getElementById('m-cert-acc');
+  if (aSel) {
+    const keep = aSel.value;
+    aSel.innerHTML = '<option value="">All Accreditations</option>';
+    [...new Set(certs.map(c => c.accreditation).filter(Boolean))].sort().forEach(a => aSel.add(new Option(a, a)));
+    aSel.value = keep;
+  }
 }
-function unlockNextNode() {
-  // BACKEND HOOK: POST /api/members/:id/skill-tree/unlock
-  triggerConfetti();
-  showToast("🎉 You've reached 80%! L&D node is now UNLOCKED!", 'success', 4000);
+function memberSessionFilter() {
+  const area = document.getElementById('m-hist-area')?.value || '';
+  const q = (document.getElementById('m-hist-search')?.value || '').trim().toLowerCase();
+  const when = document.getElementById('m-hist-date')?.value || '';
+  return s => {
+    if (area && s.area !== area) return false;
+    if (q && !String(s.title).toLowerCase().includes(q)) return false;
+    if (when === 'month') { const d = new Date(s.start), n = new Date(); if (d.getMonth() !== n.getMonth() || d.getFullYear() !== n.getFullYear()) return false; }
+    if (when === '30') { if (Math.abs(Date.now() - new Date(s.start)) > 30 * 864e5) return false; }
+    return true;
+  };
+}
+function renderMemberAttendance() {
+  const next = memberNextSession();
+  if (next) {
+    const s = next;
+    setHtml('m-att-next', `
+      <div class="stag ${sessionIsLive(s) ? 't-live' : 't-up'}">${sessionIsLive(s) ? '🔴 Live now' : '📅 Next Session'}</div>
+      <div class="m-stitle">${esc(s.title)}</div>
+      <div class="m-smeta"><span>👤 ${esc(s.speaker)}</span><span>📋 ${esc(areaStyle(s.area).short)}</span></div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:5px;">📆 ${fmtDate(s.start)} · ${fmtTime(s.start)} · ${esc(s.duration)} min${s.is_registered ? ' · ✓ Registered' : ''}</div>
+      <div class="cdb">
+        <div class="cdu"><div class="cdn" id="m-ah">--</div><div class="cdl">Hrs</div></div>
+        <div class="cdu"><div class="cdn" id="m-am">--</div><div class="cdl">Min</div></div>
+        <div class="cdu"><div class="cdn" id="m-as">--</div><div class="cdl">Sec</div></div>
+      </div>
+      <button class="btn btn-disabled" id="m-join-att" onclick="openJoinModal('${esc(s.session_id)}')" style="margin-top:9px;">Join Now (opens when live)</button>`);
+  } else {
+    setHtml('m-att-next', emptyState('📅', 'No upcoming sessions yet.'));
+  }
+  const filter = memberSessionFilter();
+  setHtml('m-att-recs', renderRecCards(recommendedSessions(10, filter), 'No open sessions match your filters.'));
+
+  const hist = (md().history || []).filter(filter);
+  setHtml('m-history', hist.length ? hist.map(h => {
+    const a = areaStyle(h.area);
+    const pct = h.attendance_pct !== null && h.attendance_pct !== undefined ? ' · ' + Math.round(h.attendance_pct) + '%' : '';
+    let icon = '<div class="m-hst hs-miss">✕</div>', action;
+    if (h.session_status === 'Cancelled') { icon = '<div class="m-hst" style="background:var(--bg);color:var(--t3);">–</div>'; action = '<span class="badge bg-gr">Session cancelled</span>'; }
+    else if (h.attendance_status === 'ATTENDED') {
+      icon = '<div class="m-hst hs-done">✓</div>';
+      action = h.certificate_id ? `<button class="btn btn-outline btn-sm" onclick="openMCert('${esc(h.certificate_id)}')">View Cert</button>` : '<span class="badge bg-y">Certificate pending</span>';
+    }
+    else if (h.attendance_status === 'INCOMPLETE') action = '<span class="miss-b">Below 80% Threshold</span>';
+    else if (h.attendance_status === 'ABSENT') action = '<span class="miss-b">Absent</span>';
+    else { icon = '<div class="m-hst" style="background:var(--yellow-l);color:#B45309;">…</div>'; action = '<span class="badge bg-y">Awaiting attendance sync</span>'; }
+    return `<div class="m-hitem">${icon}<div class="m-hi"><h4>${esc(h.title)}</h4><p>${fmtDate(h.start)} · ${esc(a.short)} · ${esc(h.duration)} min${pct}</p></div><div class="m-ha">${action}</div></div>`;
+  }).join('') : emptyState('📋', memberData && (memberData.history || []).length ? 'No sessions match your filters.' : 'No attendance history yet. Sessions you register for will show up here after they end.'));
 }
 
-// ════════════════════════════════════════════════
-// MEMBER: sessions / registration / search
-// ════════════════════════════════════════════════
-function registerForSession(btn, title) {
-  // BACKEND HOOK: POST /api/sessions/:id/register
-  btn.outerHTML = '<span class="badge bg-g" style="margin-top:7px;">✓ Registered</span>';
-  showToast(`Registered for "${title}"!`, 'success');
+// ── Certificates ──
+function renderMemberCerts() {
+  const grid = document.getElementById('m-cert-grid');
+  if (!grid) return;
+  const y = document.getElementById('m-cert-year')?.value || '';
+  const acc = document.getElementById('m-cert-acc')?.value || '';
+  const q = (document.getElementById('m-cert-search')?.value || '').trim().toLowerCase();
+  const all = md().certificates || [];
+  const list = all.filter(c => (!y || String(new Date(c.issued_at).getFullYear()) === y)
+    && (!acc || c.accreditation === acc) && (!q || String(c.title).toLowerCase().includes(q)));
+  grid.innerHTML = list.length ? list.map(c => {
+    const a = areaStyle(c.area);
+    return `
+    <div class="card m-cc" onclick="openMCert('${esc(c.certificate_id)}')">
+      <div class="m-cthumb" style="background:${a.grad};">
+        <div class="m-cthi"><div style="font-size:26px;margin-bottom:5px;">${a.seal}</div><div class="m-ctit">${esc(c.title)}</div></div>
+      </div>
+      <div class="m-cbody">
+        <h4>${esc(c.title)}</h4>
+        <p>${fmtDate(c.issued_at)}${c.accreditation ? ' · ' + esc(c.accreditation) : ''}</p>
+        <div class="vbadge">${c.status === 'ISSUED' ? '✅ Verified' : '⏳ Being prepared'}</div>
+      </div>
+    </div>`;
+  }).join('') : `<div style="grid-column:1/-1;">${emptyState('🏆', all.length ? 'No certificates match your filters.' : 'No certificates yet. Attend at least 80% of a session to earn one.')}</div>`;
 }
-function handleJoinSession() {
-  // BACKEND HOOK: this would redirect to the real Zoom URL and log a join event:
-  //   POST /api/sessions/:id/join
-  showToast('Joining session...', 'info');
-  closeMo('m-join-modal');
+function openMCert(id) {
+  const c = (md().certificates || []).find(x => x.certificate_id === id);
+  if (!c) { showToast('Certificate not found.', 'error'); return; }
+  openCertificate = c;
+  const a = areaStyle(c.area);
+  document.getElementById('m-cd-prev').style.background = a.grad;
+  setText('m-cd-seal', a.seal);
+  setText('m-cd-title', c.title);
+  setText('m-cd-meta', c.title);
+  setText('m-cd-date', fmtDateLong(c.issued_at));
+  setText('m-cd-acc', c.accreditation || '—');
+  setText('m-cd-code', c.code || '—');
+  setText('m-cd-name', loggedInUser?.name || '');
+  setText('m-cd-issued-to', loggedInUser?.name || '');
+  setText('m-cd-status', c.status === 'ISSUED' ? '✅ Verified' : '⏳ Being prepared');
+  document.getElementById('m-cert-detail').classList.add('open');
 }
-function handleFullRankings() {
-  // BACKEND HOOK: navigate to a full rankings page backed by GET /api/analytics/rankings
-  showToast('Opening full province rankings...', 'info');
+async function handleDownloadCert(path) {
+  path = path || openCertificate?.pdf;
+  if (!path) { showToast('No PDF is attached to this certificate yet.', 'info'); return; }
+  if (/^https?:\/\//.test(path)) { window.open(path, '_blank', 'noopener'); return; }
+  const key = path.replace(/^certificates\//, '');
+  const { data, error } = await sb.storage.from('certificates').createSignedUrl(key, 120);
+  if (error || !data?.signedUrl) { showToast("This certificate's PDF hasn't been generated yet.", 'info', 4500); return; }
+  window.open(data.signedUrl, '_blank', 'noopener');
 }
-function handleMemberSearch(query) {
-  if (!query.trim()) return;
-  // BACKEND HOOK: GET /api/sessions/search?q=<query>
-  showToast(`Searching sessions for "${query}"...`, 'info');
+function handleShareLinkedIn() {
+  const c = openCertificate; if (!c) return;
+  const d = new Date(c.issued_at);
+  const url = 'https://www.linkedin.com/profile/add?' + new URLSearchParams({
+    startTask: 'CERTIFICATION_NAME', name: c.title, organizationName: 'HR Calabarzon',
+    issueYear: d.getFullYear(), issueMonth: d.getMonth() + 1, certId: c.code || ''
+  });
+  window.open(url, '_blank', 'noopener');
 }
-function handleSettings() {
-  // BACKEND HOOK: navigate to a settings page / open a settings modal
-  showToast('Opening settings — notifications, privacy, preferences.', 'info');
+
+// ── Profile ──
+function renderMemberProfile() {
+  const d = md(), me = d.me || {}, st = d.stats || {};
+  const attended = Number(st.attended || 0), missed = Number(st.missed || 0);
+  const rate = attended + missed > 0 ? Number(st.rate || 0) : null;
+  setText('m-prof-level', me.mastery_level ? `${me.mastery_level} Level` : '—');
+  setText('m-prof-att', fmtPct(rate));
+  const bar = document.getElementById('m-prof-att-bar'); if (bar) bar.style.width = (rate || 0) + '%';
+  setText('m-prof-sessions', memberData ? fmtInt(attended) : '—');
+  setText('m-prof-certs', memberData ? fmtInt(st.certificates) : '—');
+  setText('m-prof-rank', st.province_rank && st.province_rank.rank ? '#' + st.province_rank.rank : '—');
+  if (memberData) {
+    setText('m-prof-fullname', me.full_name || '—');
+    setText('m-prof-email', me.email || '—');
+    setText('m-prof-province', me.province || '—');
+    setText('m-prof-company', me.company || '—');
+    setText('m-prof-department', me.department || '—');
+    setText('m-prof-position', me.position || '—');
+  }
+  const areas = [...new Set([me.expertise, ...(d.skill_tree || []).filter(n => n.status !== 'LOCKED').map(n => n.area)].filter(Boolean))];
+  setHtml('m-prof-areas', areas.length ? areas.map(a => {
+    const s = areaStyle(a);
+    return `<span style="background:${s.light};color:${s.color};padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;">${esc(a)}</span>`;
+  }).join('') : '<span style="font-size:13px;color:var(--t3);">No areas yet — they are added as you progress through sessions.</span>');
 }
 function handleEditProfile() {
-  // BACKEND HOOK: PUT /api/members/:id
-  showToast('Opening profile editor...', 'info');
+  const me = currentRole === 'admin' ? (adminMe || {}) : (md().me || {});
+  document.getElementById('ep-name').value = me.full_name || '';
+  document.getElementById('ep-province').value = me.province || 'Cavite';
+  document.getElementById('ep-company').value = me.company || '';
+  document.getElementById('ep-department').value = me.department || '';
+  document.getElementById('ep-position').value = me.position || '';
+  document.getElementById('ep-phone').value = me.phone || '';
+  document.getElementById('ep-email').value = me.email || loggedInUser?.email || '';
+  document.getElementById('ep-err').style.display = 'none';
+  clearFormErrors(Object.keys(profileFormRules()));
+  attachLiveValidation(profileFormRules);
+  openMo('m-edit-profile');
 }
-function toggleNotifications(role) {
-  // BACKEND HOOK: GET /api/notifications?role=<role>
-  if (role === 'member') showToast('3 session reminders, 1 certificate ready!', 'info');
-  else showToast('3 pending CSVs · 2 payment reviews · 1 submission awaiting.', 'info');
-}
-function handleExport(what) {
-  // BACKEND HOOK: GET /api/export?type=<what> (returns a file download)
-  showToast(`Exporting ${what}...`, 'info');
-}
-
-// ════════════════════════════════════════════════
-// COUNTDOWN (shared timer for the next live session)
-// ════════════════════════════════════════════════
-function startCountdown() {
-  setInterval(()=>{
-    if(countdown<=0){
-      ['m-join-home','m-join-att'].forEach(id=>{
-        const el=document.getElementById(id); if(!el)return;
-        el.className='btn btn-red btn-sm'; el.textContent='🔴 Join Now — LIVE!';
-      }); return;
+async function saveProfile() {
+  const val = id => document.getElementById(id).value.trim();
+  const err = document.getElementById('ep-err');
+  err.style.display = 'none';
+  if (!runValidation(profileFormRules())) { err.textContent = 'Please fix the fields marked in red.'; err.style.display = 'block'; return; }
+  if (val('ep-phone')) document.getElementById('ep-phone').value = normalizePhPhone(val('ep-phone')).value;
+  const btn = document.getElementById('ep-btn'); btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    await rpc('member_update_profile', { p_data: { full_name: val('ep-name'), province: val('ep-province'), company: val('ep-company'), department: val('ep-department'), position: val('ep-position'), phone: val('ep-phone') } });
+    // sign-in email (this is where "Forgot password?" sends the reset link)
+    const newEmail = val('ep-email').toLowerCase();
+    const oldEmail = ((currentRole === 'admin' ? adminMe?.email : md().me?.email) || loggedInUser.email || '').toLowerCase();
+    if (newEmail && newEmail !== oldEmail) {
+      if (currentRole === 'admin' && isSuperAdmin()) {
+        await rpc('admin_set_email', { p_user: adminMe.user_id, p_email: newEmail });
+        loggedInUser.email = newEmail;
+        showToast(`Sign-in email changed to ${newEmail}.`, 'success', 5000);
+      } else {
+        const check = await validateEmail(newEmail, { checkDuplicate: true });
+        if (!check.ok) throw new Error(check.msg);
+        const { error } = await sb.auth.updateUser({ email: newEmail }, { emailRedirectTo: EMAIL_LINK_URL });
+        if (error) throw error;
+        showToast(`To finish, open the confirmation link sent to ${newEmail} (a notice may also go to your current email). Until then, keep using ${oldEmail}.`, 'info', 9000);
+      }
     }
-    countdown--;
-    const h=Math.floor(countdown/3600),m=Math.floor((countdown%3600)/60),s=countdown%60;
-    const f=n=>String(n).padStart(2,'0');
-    [['m-hh','m-ah'],['m-hm','m-am'],['m-hs','m-as']].forEach(([id1,id2],i)=>{
-      const v=f([h,m,s][i]);
-      [id1,id2].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=v;});
-    });
-  },1000);
+    closeMo('m-edit-profile');
+    loggedInUser.name = val('ep-name');
+    loggedInUser.initials = makeInitials(loggedInUser.name);
+    showToast('Profile updated.', 'success');
+    if (currentRole === 'admin') {
+      ['a-user-name'].forEach(id => setText(id, loggedInUser.name));
+      ['a-user-av', 'a-tb-av'].forEach(id => setText(id, loggedInUser.initials));
+      await loadAdminData();
+    } else {
+      ['m-user-name', 'm-prof-name'].forEach(id => setText(id, loggedInUser.name));
+      ['m-user-av', 'm-tb-av', 'm-prof-av'].forEach(id => setText(id, loggedInUser.initials));
+      await loadMemberData();
+    }
+  } catch (e) {
+    showServerFieldError(e, 'ep');
+    err.textContent = friendlyAuthError(e); err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save';
+  }
 }
 
+// ── Sessions: register / join / countdown ──
+async function registerForSession(sessionId, btn) {
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Registering...'; }
+  try {
+    const r = await rpc('member_register_session', { p_session: sessionId });
+    if (r.status === 'already registered') showToast("You're already registered for this session.", 'info');
+    else if (r.free) showToast("You're registered! The Zoom link is now available.", 'success', 4500);
+    else showToast(`Registered! Pay the ${fmtMoney(r.fee)} fee and submit your reference number to unlock the Zoom link.`, 'success', 6000);
+    await Promise.all([loadMemberData(), loadMemberPayments()]);
+    if (!r.free && r.status !== 'already registered') openSubmitPayment(sessionId);
+    return true;
+  } catch (e) {
+    showToast(friendlyAuthError(e), 'error', 5000);
+    if (btn) { btn.disabled = false; btn.textContent = orig || 'Register'; }
+    return false;
+  }
+}
+
+// Session details window: members look at a session first, then go Back or Register
+function openSessionView(sessionId) {
+  const s = (md().upcoming || []).find(x => x.session_id === sessionId);
+  if (!s) { showToast('This session is no longer open.', 'info'); return; }
+  const a = areaStyle(s.area);
+  const left = Number(s.capacity || 0) - Number(s.registered_count || 0);
+  const full = !s.is_registered && Number(s.capacity) > 0 && left <= 0;
+  setText('msv-title', s.title);
+  setHtml('msv-badges', `<span class="badge ${a.badge}">${esc(a.short)}</span>${s.type ? `<span class="badge bg-gr">${esc(s.type)}</span>` : ''}${sessionIsLive(s) ? '<span class="badge bg-r">🔴 Live now</span>' : ''}${s.is_registered ? '<span class="badge bg-g">✓ Registered</span>' : ''}`);
+  const row = (k, v) => `<div><div class="mf-lbl">${k}</div><div style="font-size:13px;font-weight:600;">${v}</div></div>`;
+  setHtml('msv-details', [
+    row('📅 Date', fmtDateLong(s.start)),
+    row('🕒 Time', `${fmtTime(s.start)} – ${fmtTime(s.end)} (${esc(s.duration)} min)`),
+    row('👤 Speaker', esc(s.speaker || 'To be announced') + (s.speaker_title ? `<div style="font-size:12px;color:var(--t3);font-weight:500;">${esc(s.speaker_title)}</div>` : '')),
+    row('💳 Admission fee', Number(s.fee) > 0 ? fmtMoney(s.fee) : 'Free'),
+    row('🎟 Slots', Number(s.capacity) > 0 ? `${fmtInt(Math.max(left, 0))} of ${fmtInt(s.capacity)} left` : '—'),
+    row('🏅 Accreditation', esc(s.accreditation || '—'))
+  ].join(''));
+  setText('msv-desc', s.description || 'No description yet.');
+  const note = document.getElementById('msv-note');
+  let footer = `<button class="btn btn-ghost" onclick="closeMo('m-session-view')">← Back</button>`;
+  if (s.is_registered) {
+    note.style.display = 'block'; note.style.background = 'var(--green-l)'; note.style.color = 'var(--green)';
+    note.textContent = zoomReady(s) ? "You're registered. The Join button opens when the session starts."
+      : s.payment_status === 'PENDING_PAYMENT' ? "You're registered. Your payment is waiting for an admin to confirm it — the Zoom link unlocks after that."
+      : "You're registered. Pay the admission fee and submit your reference number to unlock the Zoom link.";
+    if (!zoomReady(s) && s.payment_status !== 'PENDING_PAYMENT' && Number(s.fee) > 0) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment</button>`;
+    if (zoomReady(s)) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openJoinModal('${esc(s.session_id)}')">🎯 Join options</button>`;
+  } else if (full) {
+    note.style.display = 'block'; note.style.background = 'var(--red-l)'; note.style.color = 'var(--red-d)';
+    note.textContent = 'This session is full.';
+  } else {
+    note.style.display = Number(s.fee) > 0 ? 'block' : 'none'; note.style.background = 'var(--yellow-l)'; note.style.color = '#B45309';
+    note.textContent = `This session has a ${fmtMoney(s.fee)} admission fee. Your seat and Zoom link are confirmed once payment is received.`;
+    footer += `<button class="btn btn-primary" id="msv-register" onclick="registerFromView('${esc(s.session_id)}')">✓ Register</button>`;
+  }
+  setHtml('msv-footer', footer);
+  openMo('m-session-view');
+}
+async function registerFromView(sessionId) {
+  const ok = await registerForSession(sessionId, document.getElementById('msv-register'));
+  if (ok) closeMo('m-session-view');
+}
+function openJoinModal(sessionId) {
+  const s = (md().upcoming || []).find(x => x.session_id === sessionId);
+  if (!s) return;
+  if (!s.is_registered) { openSessionView(sessionId); return; }
+  const live = sessionIsLive(s);
+  setHtml('m-join-body', `You're joining: <strong>${esc(s.title)}</strong> with ${esc(s.speaker)}<br><br>📅 ${fmtDate(s.start)} · ${fmtTime(s.start)} · ${esc(s.duration)} min<br><br>You may wait in the Zoom waiting room until the host lets you in. Your attendance is recorded from Zoom automatically.`);
+  let footer;
+  if (!s.is_registered) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');registerForSession('${esc(s.session_id)}')">+ Register</button>`;
+  else if (!zoomReady(s) && s.payment_status === 'PENDING_PAYMENT') footer = `<span class="badge bg-y">⏳ Payment sent — waiting for confirmation</span>`;
+  else if (!zoomReady(s) && Number(s.fee) > 0) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment to unlock Zoom</button>`;
+  else if (!zoomReady(s)) footer = `<span class="badge bg-y">⏳ The Zoom link isn't ready yet</span>`;
+  else if (live) footer = `<button class="btn btn-primary" onclick="handleJoinSession('${esc(s.session_id)}', this)">🚀 Join Now</button>`;
+  else footer = `<span class="badge bg-b">🔒 Join opens at ${fmtTime(s.start)}, when the session starts</span>`;
+  setHtml('m-join-footer', footer + `<button class="btn btn-ghost" onclick="closeMo('m-join-modal')">Close</button>`);
+  openMo('m-join-modal');
+}
+// The Zoom link stays on the server until the start time (15_join_lock.sql);
+// it is only handed out when the member presses Join during the session.
+function zoomReady(s) { return s.zoom_ready !== undefined ? !!s.zoom_ready : !!s.zoom_join_url; }
+async function handleJoinSession(sessionId, btn) {
+  const s = (md().upcoming || []).find(x => x.session_id === sessionId);
+  if (!s || !zoomReady(s)) { showToast('The Zoom link is not available yet.', 'info'); return; }
+  if (Date.now() < new Date(s.start).getTime()) { showToast(`This session hasn't started yet. You can join at ${fmtTime(s.start)}.`, 'info', 5000); return; }
+  let url = s.zoom_join_url;                               // only present if 15_join_lock.sql hasn't been run
+  if (!url) {
+    const tab = window.open('', '_blank');                 // open first — browsers block tabs opened after waiting
+    if (tab) { try { tab.document.write('<p style="font-family:sans-serif;padding:24px;">Opening Zoom…</p>'); } catch (_) { /* ignore */ } }
+    if (btn) btn.disabled = true;
+    try {
+      const r = await rpc('member_join_link', { p_session: sessionId });
+      url = r && r.url;
+      if (!/^https:\/\//i.test(url || '')) throw new Error('The Zoom link for this session is not valid. Please tell the admin.');
+      if (tab) tab.location.href = url; else window.location.href = url;
+    } catch (e) {
+      if (tab) tab.close();
+      showToast(friendlyAuthError(e), 'error', 6000);
+      return;
+    } finally { if (btn) btn.disabled = false; }
+  } else window.open(url, '_blank', 'noopener');
+  closeMo('m-join-modal');
+}
+function stopCountdown() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = null;
+}
+function startCountdown() {
+  stopCountdown();
+  const s = memberNextSession();
+  if (!s) return;
+  const tick = () => {
+    const start = new Date(s.start).getTime(), end = new Date(s.end).getTime(), now = Date.now();
+    let left = Math.max(0, Math.floor((start - now) / 1000));
+    const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), sec = left % 60;
+    const f = n => String(n).padStart(2, '0');
+    [['m-hh', 'm-ah', h > 99 ? '99+' : f(h)], ['m-hm', 'm-am', f(m)], ['m-hs', 'm-as', f(sec)]].forEach(([a, b, v]) => { setText(a, v); setText(b, v); });
+    ['m-join-home', 'm-join-att'].forEach(id => {
+      const el = document.getElementById(id); if (!el) return;
+      if (now >= end) { el.className = 'btn btn-disabled btn-sm'; el.textContent = 'Session ended'; }
+      else if (!s.is_registered) { el.className = 'btn btn-outline btn-sm'; el.textContent = '👁 View session'; }
+      else if (now >= start) { el.className = 'btn btn-red btn-sm'; el.textContent = '🔴 Join Now — LIVE!'; }
+      else { el.className = 'btn btn-disabled btn-sm'; el.textContent = '🔒 Join opens at start'; }
+    });
+    if (now >= end) stopCountdown();
+  };
+  tick();
+  countdownTimer = setInterval(tick, 1000);
+}
+
+// ── Member misc ──
+function handleFullRankings() {
+  const r = md().rankings || [];
+  if (!r.length) { showToast('No province rankings yet.', 'info'); return; }
+  showToast(r.map((x, i) => `${i + 1}. ${x.province} — ${fmtInt(x.attended)} attended`).join('  ·  '), 'info', 6000);
+}
+function handleMemberSearch(query) {
+  mShowPage('attendance');
+  const el = document.getElementById('m-hist-search'); if (el) el.value = query.trim();
+  renderMemberAttendance();
+}
+
+
 // ════════════════════════════════════════════════
-// ADMIN: members table (rendered from membersData)
+// ADMIN: load + render
 // ════════════════════════════════════════════════
-const initialsColor = { blue:'var(--blue-l)|var(--blue)', green:'var(--green-l)|var(--green)', red:'var(--red-l)|var(--red)', yellow:'var(--yellow-l)|#B45309' };
+let lastDataLoad = 0;
+let adminPayments = null;      // admin_payments(): every payment + every unpaid registration
+async function loadAdminData() {
+  lastDataLoad = Date.now();
+  const [dash, who, list, pays] = await Promise.allSettled([rpc('admin_dashboard'), rpc('admin_whoami'), rpc('admin_members'), rpc('admin_payments')]);
+  adminPayments = pays.status === 'fulfilled' ? (pays.value || []) : null;
+  if (pays.status === 'rejected') console.error('[Supabase] admin_payments failed — did you run 13_payments.sql?', pays.reason);
+  adminData = dash.status === 'fulfilled' ? dash.value : null;
+  adminMe = who.status === 'fulfilled' ? who.value : null;
+  adminMembers = list.status === 'fulfilled' ? list.value : null;
+  if (dash.status === 'rejected') {
+    console.error('[Supabase] admin_dashboard failed:', dash.reason);
+    showToast('Could not load dashboard data. ' + friendlyAuthError(dash.reason), 'error', 6000);
+  }
+  if (who.status === 'rejected' || list.status === 'rejected') {
+    console.error('[Supabase] member management failed — did you run 06_member_management.sql?', who.reason || list.reason);
+  }
+  renderAdminAll();
+  autoSyncAttendance();          // fetch Zoom attendance of finished sessions in the background
+}
+function isSuperAdmin() { return !!(adminMe && adminMe.is_super); }
+// Rows for the Data Management table (06 list if available, else the dashboard list)
+function membersSource() {
+  if (adminMembers) return adminMembers;
+  return (ad().members || []).map(m => Object.assign({ role: 'member', archived: false }, m));
+}
+function ad() {
+  return adminData || { overview: {}, members: [], sessions: [], payments: [], registrations: [], by_province: [], by_area: [], cert_status: {}, monthly: [], areas: [], provinces: [] };
+}
+function renderAdminAll() {
+  fillAdminSelects();
+  renderAdminIdentity();
+  renderAdminProfile();
+  renderAdminHome();
+  renderAnalytics();
+  renderMembersTable();
+  renderSessions();
+  renderSyncSelect();
+  renderAdminCertificates();
+  renderCertMonitor();
+  renderPayments();
+  setupAdminBot();
+  updateAdminBadges();
+}
+function deltaHtml(cur, prev, fmt = fmtInt, suffix = 'vs last month') {
+  if (cur === null || cur === undefined || prev === null || prev === undefined) return '';
+  const d = Number(cur) - Number(prev);
+  if (d === 0) return `<span style="color:var(--t3);">No change ${suffix}</span>`;
+  return `<span style="color:${d > 0 ? 'var(--green)' : 'var(--red)'};">${d > 0 ? '↑' : '↓'} ${fmt(Math.abs(d))} ${suffix}</span>`;
+}
+function sessionStatusBadge(s) {
+  if (s.status === 'Draft') return '<span class="badge bg-gr">Draft</span>';
+  if (s.status === 'Cancelled') return '<span class="badge bg-gr">Cancelled</span>';
+  if (sessionIsLive(s)) return '<span class="badge bg-r">🔴 Live</span>';
+  if (new Date(s.end) > Date.now()) return '<span class="badge bg-b">📅 Upcoming</span>';
+  if (Number(s.registered) > 0 && Number(s.log_count) === 0) return '<span class="badge bg-y">⏳ Awaiting Sync</span>';
+  return '<span class="badge bg-g">✓ Done</span>';
+}
+function isPastSession(s) { return s.status !== 'Draft' && (s.status === 'Cancelled' || s.status === 'Completed' || new Date(s.end) <= Date.now()); }
+function isUpcomingSession(s) { return (s.status === 'Upcoming' || s.status === 'Live') && new Date(s.end) > Date.now(); }
+
+function fillAdminSelects() {
+  const d = ad();
+  const fill = (id, values, first, labelFn = v => v) => {
+    const el = document.getElementById(id); if (!el) return;
+    const keep = el.value;
+    el.innerHTML = first ? `<option value="">${first}</option>` : '';
+    values.forEach(v => el.add(new Option(labelFn(v), v)));
+    if ([...el.options].some(o => o.value === keep)) el.value = keep;
+  };
+  fill('a-mem-province', d.provinces || [], 'All Provinces');
+  fill('a-mem-level', ['Entry', 'Mid', 'Master'], 'All Levels');
+  fill('acs-area', d.areas || [], null);
+  fill('a-sess-area', d.areas || [], 'All Areas');
+  fillReportSelects();
+  const roleSel = document.getElementById('a-mem-role'); if (roleSel) roleSel.style.display = isSuperAdmin() ? '' : 'none';
+  const withRegs = (d.sessions || []).filter(s => Number(s.registered) > 0);
+  fill('a-cert-filter', withRegs.map(s => s.session_id), 'All Sessions', id => { const s = withRegs.find(x => x.session_id === id); return `${s.title} · ${fmtDateShort(s.start)}`; });
+  const paySessions = [...new Map((d.payments || []).filter(p => p.session_id).map(p => [p.session_id, p.session])).entries()];
+  fill('a-pay-session', paySessions.map(x => x[0]), 'All Sessions', id => (paySessions.find(x => x[0] === id) || [, id])[1]);
+}
+
+function renderAdminHome() {
+  const o = ad().overview || {}, loaded = !!adminData;
+  setText('a-ov-sync', loaded ? fmtInt(o.awaiting_sync) : '—');
+  setText('a-ov-pending', loaded ? fmtInt(o.pending_payments) : '—');
+  setText('a-ov-active', loaded ? fmtInt(o.active_sessions) : '—');
+  setText('a-ov-members', loaded ? fmtInt(o.total_members) : '—');
+  setText('a-ov-members-new', loaded ? (Number(o.new_members_month) > 0 ? `↑ ${fmtInt(o.new_members_month)} this month` : 'No new members this month') : '');
+  setText('a-ov-sessions', loaded ? fmtInt(o.sessions_year) : '—');
+  setHtml('a-ov-sessions-delta', loaded ? deltaHtml(o.sessions_month, o.sessions_prev) : '');
+  setText('a-ov-certs', loaded ? fmtInt(o.certs_total) : '—');
+  setHtml('a-ov-certs-delta', loaded ? `<span style="color:${Number(o.certs_month) ? 'var(--green)' : 'var(--t3)'};">${Number(o.certs_month) ? '↑ ' + fmtInt(o.certs_month) : 'None'} this month</span>` : '');
+  setText('a-ov-revenue', loaded ? fmtMoney(o.revenue_total) : '—');
+  setHtml('a-ov-revenue-delta', loaded ? `<span style="color:${Number(o.revenue_month) ? 'var(--green)' : 'var(--t3)'};">${Number(o.revenue_month) ? '↑ ' + fmtMoney(o.revenue_month) : 'None'} this month</span>` : '');
+  setText('a-ov-att', loaded ? fmtPct(o.attendance_rate) : '—');
+  const m = ad().monthly || [];
+  const cur = m[m.length - 1]?.rate, prev = m[m.length - 2]?.rate;
+  setHtml('a-ov-att-delta', loaded ? (cur != null && prev != null ? deltaHtml(cur, prev, v => v + '%') : '<span style="color:var(--t3);">Not enough data yet</span>') : '');
+
+  const recent = (ad().sessions || []).filter(s => s.status !== 'Draft').slice(0, 5);
+  setHtml('a-home-sessions', recent.length ? recent.map(s => `
+    <tr><td class="nc">${esc(s.title)}</td><td>${fmtDateShort(s.start)}</td><td>${areaBadge(s.area)}</td>
+    <td>${isUpcomingSession(s) ? `${fmtInt(s.registered)}/${fmtInt(s.capacity)}` : `${fmtInt(s.attended)}/${fmtInt(s.registered)}`}</td><td>${sessionStatusBadge(s)}</td></tr>`).join('')
+    : emptyRow(5, 'No sessions yet. Click "+ New Session" to create the first one.'));
+
+  const pays = (ad().payments || []).slice(0, 3);
+  setHtml('a-home-payments', pays.length ? pays.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:9px;font-size:13px;"><div style="width:27px;height:27px;border-radius:50%;background:${['var(--blue-l)', 'var(--yellow-l)', 'var(--red-l)'][i]};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${['var(--blue)', '#B45309', 'var(--red)'][i]};">${esc(initialsOf(p.member))}</div><div style="flex:1;"><div style="font-weight:600;">${esc(p.member || '—')}</div><div style="font-size:11px;color:var(--t3);">${esc(p.session || '—')}</div></div><div style="text-align:right;"><div style="font-weight:700;">${fmtMoney(p.amount)}</div>${paymentBadge(p.status)}</div></div>`).join('')
+    : emptyState('💳', 'No payments yet.'));
+}
+
+// ── Members (Data Management) ──
+function filteredMembers() {
+  const q = (document.getElementById('a-mem-search')?.value || '').trim().toLowerCase();
+  const prov = document.getElementById('a-mem-province')?.value || '';
+  const lvl = document.getElementById('a-mem-level')?.value || '';
+  const role = document.getElementById('a-mem-role')?.value || '';
+  const st = document.getElementById('a-mem-status')?.value || 'active';
+  return membersSource().filter(m =>
+    (!q || [m.full_name, m.member_id, m.email].some(v => String(v || '').toLowerCase().includes(q)))
+    && (!prov || m.province === prov) && (!lvl || m.level === lvl)
+    && (!role || (role === 'member' ? m.role === 'member' : m.role !== 'member'))
+    && (st === 'all' || (st === 'archived' ? m.archived : !m.archived)));
+}
+const ROLE_BADGE = { super_admin: '<span class="badge bg-r">🛡 Super Admin</span>', admin: '<span class="badge bg-p">🛡 Admin</span>' };
 function renderMembersTable() {
   const tbody = document.getElementById('a-members-tbody');
   if (!tbody) return;
-  tbody.innerHTML = membersData.map((m, i) => {
-    const [bg, fg] = (initialsColor[m.color] || initialsColor.blue).split('|');
+  const all = filteredMembers();
+  const pages = Math.max(1, Math.ceil(all.length / MEMBERS_PER_PAGE));
+  aMembersPage = Math.min(Math.max(1, aMembersPage), pages);
+  const start = (aMembersPage - 1) * MEMBERS_PER_PAGE;
+  const rows = all.slice(start, start + MEMBERS_PER_PAGE);
+  const colors = [['var(--blue-l)', 'var(--blue)'], ['var(--green-l)', 'var(--green)'], ['var(--red-l)', 'var(--red)'], ['var(--yellow-l)', '#B45309']];
+  const levelBadge = { Entry: 'bg-y', Mid: 'bg-b', Master: 'bg-r' };
+  tbody.innerHTML = rows.length ? rows.map((m, i) => {
+    const [bg, fg] = colors[(start + i) % colors.length];
+    const att = m.attendance || {};
+    const hasAtt = Number(att.attended || 0) + Number(att.missed || 0) > 0;
+    const rate = hasAtt ? Number(att.rate) : null;
     return `
-    <tr>
-      <td><div style="display:flex;align-items:center;gap:7px;"><div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${fg};">${m.initials}</div><div class="nc">${m.name}</div></div></td>
-      <td style="color:var(--t3);font-size:12px;">${m.id}</td>
-      <td>${m.province}</td>
-      <td><span class="badge ${m.expertiseBadge}">${m.expertise}</span></td>
-      <td><span class="badge ${m.levelBadge}">${m.level}</span></td>
-      <td><div style="display:flex;align-items:center;gap:7px;"><div class="prog" style="width:55px;"><div class="prog-f" style="width:${m.attendance}%;background:${m.attendance>=80?'var(--green)':m.attendance>=70?'var(--red)':'var(--yellow)'};"></div></div><span style="font-size:12px;">${m.attendance}%</span></div></td>
-      <td>${m.certs}</td>
-      <td><span class="badge ${m.status==='Active'?'bg-g':'bg-gr'}">${m.status}</span></td>
-      <td><button class="btn btn-xs btn-ghost" onclick="handleViewMember(${i})">View</button></td>
+    <tr class="${m.archived ? 'is-archived' : ''}">
+      <td><div style="display:flex;align-items:center;gap:7px;"><div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${fg};">${esc(initialsOf(m.full_name))}</div><div><div class="nc">${esc(m.full_name)} ${ROLE_BADGE[m.role] || ''}</div><div style="font-size:11px;color:var(--t3);">${esc(m.email)}${m.email_confirmed ? '' : ' · <span style="color:#B45309;">unconfirmed</span>'}</div></div></div></td>
+      <td style="color:var(--t3);font-size:12px;">${esc(m.member_id || '—')}</td>
+      <td>${esc(m.province || '—')}</td>
+      <td>${m.expertise ? areaBadge(m.expertise) : '—'}</td>
+      <td><span class="badge ${levelBadge[m.level] || 'bg-gr'}">${esc(m.level)}</span></td>
+      <td>${rate == null ? '<span style="font-size:12px;color:var(--t3);">No data</span>' : `<div style="display:flex;align-items:center;gap:7px;"><div class="prog" style="width:55px;"><div class="prog-f" style="width:${rate}%;background:${rate >= 80 ? 'var(--green)' : rate >= 70 ? 'var(--red)' : 'var(--yellow)'};"></div></div><span style="font-size:12px;">${rate}%</span></div>`}</td>
+      <td>${fmtInt(m.certificates)}</td>
+      <td><span class="badge ${m.archived ? 'bg-gr' : m.status === 'Active' ? 'bg-g' : m.status === 'Suspended' ? 'bg-r' : 'bg-y'}">${m.archived ? '🗄 Archived' : esc(m.status)}</span></td>
+      <td><button class="btn btn-xs btn-ghost act-btn" onclick="openActMenu(event,'${esc(m.user_id)}')">Actions ▾</button></td>
     </tr>`;
-  }).join('');
+  }).join('') : emptyRow(9, membersSource().length ? 'No members match your filters.' : 'No members yet. Members appear here once they register.');
+  setText('a-mem-footer', all.length ? `Showing ${start + 1}–${start + rows.length} of ${fmtInt(all.length)} member${all.length === 1 ? '' : 's'}` : '');
+  let btns = `<button class="btn btn-xs btn-ghost" onclick="handlePagination(-1)" ${aMembersPage <= 1 ? 'disabled' : ''}>← Prev</button>`;
+  for (let p = Math.max(1, aMembersPage - 2); p <= Math.min(pages, aMembersPage + 2); p++) {
+    btns += `<button class="btn btn-xs ${p === aMembersPage ? 'btn-red' : 'btn-ghost'}" onclick="aMembersPage=${p};renderMembersTable()">${p}</button>`;
+  }
+  btns += `<button class="btn btn-xs btn-ghost" onclick="handlePagination(1)" ${aMembersPage >= pages ? 'disabled' : ''}>Next →</button>`;
+  setHtml('a-mem-pages', btns);
 }
-function handleViewMember(i) {
-  // BACKEND HOOK: GET /api/members/:id (open a full profile drawer/modal)
-  const m = membersData[i];
-  showToast(`Viewing ${m.name} — ${m.id}`, 'info');
+function handlePagination(dir) { aMembersPage += dir; renderMembersTable(); }
+function handleViewMember(userId) {
+  const m = membersSource().find(x => x.user_id === userId); if (!m) return;
+  const att = m.attendance || {};
+  setHtml('a-md-body', [
+    ['Account type', { member: 'Member', admin: 'Admin', super_admin: 'Super Admin' }[m.role] || 'Member'],
+    ['Member ID', m.member_id], ['Email', m.email + (m.email_confirmed ? ' ✓' : ' (not confirmed)')], ['Province', m.province],
+    ['Phone', m.phone], ['Company', m.company], ['Department', m.department], ['Position', m.position], ['Expertise', m.expertise], ['Level', m.level],
+    ['Status', m.archived ? `Archived ${fmtDate(m.archived_at)}` : m.status],
+    ['Sessions', `${fmtInt(att.registered)} registered · ${fmtInt(att.attended)} attended`], ['Certificates', fmtInt(m.certificates)],
+    ['Registered', fmtDate(m.registered_at)], ['Last sign-in', m.last_sign_in ? `${fmtDate(m.last_sign_in)} ${fmtTime(m.last_sign_in)}` : 'Never']
+  ].map(([k, v]) => `<div style="display:flex;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;">${k}</div><div style="font-size:13px;font-weight:600;">${esc(v || '—')}</div></div>`).join(''));
+  setText('a-md-title', m.full_name);
+  const acts = memberActions(m).filter(a => a.key !== 'view');
+  setHtml('a-md-footer', acts.map(a => `<button class="btn ${a.cls === 'danger' ? 'btn-danger' : a.cls === 'good' ? 'btn-green' : 'btn-outline'}" onclick="closeMo('a-member-detail');${a.call}">${a.label}</button>`).join('')
+    + `<button class="btn btn-ghost" onclick="closeMo('a-member-detail')">Close</button>`);
+  openMo('a-member-detail');
 }
-function handleAddMember() {
-  // BACKEND HOOK: POST /api/members — open a real "add member" form/modal.
-  // Demo: push a placeholder row so the table visibly updates.
-  membersData.push({ name:'New Member', initials:'NM', color:'blue', id:`HRC-2025-${String(1000+membersData.length)}`, province:'Cavite', expertise:'Recruitment', expertiseBadge:'bg-t', level:'Entry', levelBadge:'bg-y', attendance:0, certs:0, status:'Active' });
-  renderMembersTable();
-  showToast('New member added (demo row) — wire this to POST /api/members.', 'success');
+let aSessionQuery = '';
+const PAST_PAGE = 10;           // past sessions shown at a time (most recent first)
+let aPastShown = PAST_PAGE;
+function sessionMatches(s, q) {
+  return [s.title, s.speaker, s.area, s.type].some(v => String(v || '').toLowerCase().includes(q));
 }
-function handlePagination(dir) {
-  // BACKEND HOOK: GET /api/members?page=<n> and re-render renderMembersTable()
-  showToast(dir > 0 ? 'Loading next page...' : 'Loading previous page...', 'info');
+function memberMatches(m, q) {
+  return [m.full_name, m.member_id, m.email].some(v => String(v || '').toLowerCase().includes(q));
 }
+// Top search bar: searches the page you are on; from other pages it goes to whichever has matches
 function handleAdminSearch(query) {
-  if (!query.trim()) return;
-  // BACKEND HOOK: GET /api/members/search?q=<query> or /api/sessions/search?q=<query>
-  showToast(`Searching for "${query}"...`, 'info');
+  const q = query.trim(), lq = q.toLowerCase();
+  const on = id => document.getElementById(id)?.classList.contains('active');
+  if (!q) { clearSessionSearch(); const el = document.getElementById('a-mem-search'); if (el && el.value) { el.value = ''; renderMembersTable(); } return; }
+  const sCount = (ad().sessions || []).filter(s => sessionMatches(s, lq)).length;
+  const mCount = membersSource().filter(m => memberMatches(m, lq)).length;
+  const toSessions = on('ap-sessions') || (!on('ap-members') && sCount > 0 && mCount === 0);
+  if (toSessions) {
+    aSessionQuery = q;
+    aShowPage('sessions');
+    renderSessions();
+    if (!sCount) showToast(`No sessions match "${q}".`, 'info', 4000);
+    return;
+  }
+  if (!on('ap-members') && !mCount) { showToast(`Nothing found for "${q}" — no members or sessions match.`, 'info', 4500); return; }
+  aShowPage('members');
+  const el = document.getElementById('a-mem-search'); if (el) el.value = q;
+  aMembersPage = 1;
+  renderMembersTable();
 }
-function handleAdminSettings() {
-  // BACKEND HOOK: navigate to admin settings — permissions, API keys, notifications
-  showToast('Opening admin settings — permissions, API keys, notifications.', 'info');
+function clearSessionSearch() {
+  aSessionQuery = '';
+  const top = document.getElementById('a-search-input'); if (top) top.value = '';
+  aPastShown = PAST_PAGE;
+  ['a-sess-search', 'a-sess-area', 'a-sess-from', 'a-sess-to'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const per = document.getElementById('a-sess-period'); if (per) per.value = '';
+  const sort = document.getElementById('a-sess-sort'); if (sort) sort.value = 'recent';
+  renderSessions();
+}
+function onSessionSearchInput(v) { aSessionQuery = v; aPastShown = PAST_PAGE; renderSessions(); }
+function onSessionFilterChange() { aPastShown = PAST_PAGE; renderSessions(); }
+function showMorePastSessions() { aPastShown += PAST_PAGE; renderSessions(); }
+// Date window of the "When" filter (Manila days), like a transaction-history filter
+function sessionPeriodRange() {
+  const per = document.getElementById('a-sess-period')?.value || '';
+  const custom = document.getElementById('a-sess-custom'); if (custom) custom.style.display = per === 'custom' ? 'flex' : 'none';
+  if (!per) return { from: null, to: null };
+  const today = manilaParts(new Date().toISOString()).date;                 // YYYY-MM-DD
+  const day = (d, end) => new Date(`${d}T${end ? '23:59:59' : '00:00:00'}+08:00`);
+  const shift = n => manilaParts(new Date(day(today).getTime() + n * 864e5 + 432e5).toISOString()).date;
+  const [y, m] = today.split('-').map(Number);
+  const pad = n => String(n).padStart(2, '0');
+  const monthEnd = (yy, mm) => pad(new Date(Date.UTC(yy, mm, 0)).getUTCDate());
+  switch (per) {
+    case 'today': return { from: day(today), to: day(today, true) };
+    case 'next7': return { from: day(today), to: day(shift(7), true) };
+    case 'last7': return { from: day(shift(-7)), to: day(today, true) };
+    case 'last30': return { from: day(shift(-30)), to: day(today, true) };
+    case 'last90': return { from: day(shift(-90)), to: day(today, true) };
+    case 'month': return { from: day(`${y}-${pad(m)}-01`), to: day(`${y}-${pad(m)}-${monthEnd(y, m)}`, true) };
+    case 'lastmonth': { const yy = m === 1 ? y - 1 : y, mm = m === 1 ? 12 : m - 1; return { from: day(`${yy}-${pad(mm)}-01`), to: day(`${yy}-${pad(mm)}-${monthEnd(yy, mm)}`, true) }; }
+    case 'year': return { from: day(`${y}-01-01`), to: day(`${y}-12-31`, true) };
+    case 'custom': {
+      const f = document.getElementById('a-sess-from')?.value, t = document.getElementById('a-sess-to')?.value;
+      const r = { from: f ? day(f) : null, to: t ? day(t, true) : null };
+      if (r.from && r.to && r.from > r.to) r.error = 'The From date is later than the To date. Correct the dates to see sessions.';
+      return r;
+    }
+  }
+  return { from: null, to: null };
 }
 
-// ════════════════════════════════════════════════
-// ADMIN: session creation / editing
-// ════════════════════════════════════════════════
-function saveSessionDraft() {
-  // BACKEND HOOK: POST /api/sessions { status: 'draft', ... }
-  sessionsData.draft++;
-  showToast('Session saved as draft.', 'success');
-  closeMo('a-create-session');
+// ── Sessions ──
+function renderSessions() {
+  const sq = aSessionQuery.trim().toLowerCase();
+  const box = document.getElementById('a-sess-search'); if (box && box.value !== aSessionQuery && document.activeElement !== box) box.value = aSessionQuery;
+  const area = document.getElementById('a-sess-area')?.value || '';
+  const sortDir = document.getElementById('a-sess-sort')?.value || 'recent';
+  const range = sessionPeriodRange();
+  const inRange = s => { const d = new Date(s.start); return !range.error && (!range.from || d >= range.from) && (!range.to || d <= range.to); };
+  const all = (ad().sessions || []).filter(s => (!sq || sessionMatches(s, sq)) && (!area || s.area === area) && inRange(s));
+  const byDate = (a, b) => new Date(a.start) - new Date(b.start);
+  // "Most recent first" = nearest to today first: soonest upcoming, latest past
+  const upcoming = all.filter(isUpcomingSession).sort(sortDir === 'oldest' ? (a, b) => byDate(b, a) : byDate);
+  const past = all.filter(isPastSession).sort(sortDir === 'oldest' ? byDate : (a, b) => byDate(b, a));
+  const drafts = all.filter(s => s.status === 'Draft').sort(sortDir === 'oldest' ? byDate : (a, b) => byDate(b, a));
+  const filtering = !!(sq || area || range.from || range.to || range.error);
+  ['a-sess-from', 'a-sess-to'].forEach(id => document.getElementById(id)?.classList.toggle('is-invalid', !!range.error));
+  const chip = document.getElementById('a-sess-filter');
+  if (chip) {
+    chip.style.display = filtering ? 'flex' : 'none';
+    chip.classList.toggle('is-error', !!range.error);
+    if (range.error) chip.innerHTML = `<span>⚠ ${esc(range.error)}</span><button class="btn btn-xs btn-ghost" onclick="clearSessionSearch()">✕ Clear filters</button>`;
+    else if (filtering) {
+      chip.innerHTML = `<span>🔎 ${all.length} session${all.length === 1 ? '' : 's'} found${sq ? ` for “<strong>${esc(aSessionQuery)}</strong>”` : ''} — ${upcoming.length} upcoming · ${past.length} past · ${drafts.length} draft${drafts.length === 1 ? '' : 's'}</span><button class="btn btn-xs btn-ghost" onclick="clearSessionSearch()">✕ Clear filters</button>`;
+      // jump to the first tab that has a match
+      const cur = document.querySelector('#ap-sessions .apanel.active')?.id;
+      const has = { 'as-upcoming': upcoming.length, 'as-past': past.length, 'as-draft': drafts.length };
+      if (!has[cur]) { const t = Object.keys(has).find(k => has[k]); if (t) aSwitchTab(document.getElementById({ 'as-upcoming': 'a-tab-upcoming', 'as-past': 'a-tab-past', 'as-draft': 'a-tab-draft' }[t]), t); }
+    }
+  }
+  setText('a-tab-upcoming', `Upcoming (${upcoming.length})`);
+  setText('a-tab-past', `Past Sessions (${past.length})`);
+  setText('a-tab-draft', `Drafts (${drafts.length})`);
+  const waiting = Number(ad().overview?.awaiting_sync || 0);
+  setText('a-tab-sync', `🔄 Attendance Sync${waiting ? ` (${waiting})` : ''}`);
+
+  setHtml('a-sess-upcoming', upcoming.length ? upcoming.map(s => {
+    const live = sessionIsLive(s), soon = new Date(s.start) - Date.now() < 864e5;
+    const cap = Number(s.capacity) ? Math.round(100 * Number(s.registered) / Number(s.capacity)) : 0;
+    return `<div class="card cp" style="border-left:4px solid ${live || soon ? 'var(--red)' : 'var(--blue)'};"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px;">${live ? '<span class="badge bg-r">🔴 Live now</span>' : soon ? '<span class="badge bg-r">🔴 Live Soon</span>' : '<span class="badge bg-b">📅 Upcoming</span>'}<div style="display:flex;gap:5px;"><button class="btn btn-xs btn-ghost" onclick="openSessionEditor('${esc(s.session_id)}')">✏️ Edit</button><button class="btn btn-xs btn-danger" onclick="handleCancelSession('${esc(s.session_id)}')">Cancel</button></div></div>
+      <div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:7px;">${esc(s.title)}</div>
+      <div style="font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>📅 ${fmtDate(s.start)} · ${fmtTime(s.start)} · ${esc(s.duration)} min</div><div>👤 ${esc(s.speaker)} · ${esc(areaStyle(s.area).short)}</div>${s.zoom_join_url ? `<div>🔗 <span style="color:var(--blue);cursor:pointer;" onclick="copyZoomLink('${esc(s.session_id)}')">${esc(String(s.zoom_join_url).replace(/^https?:\/\//, ''))}</span> <button class="btn btn-xs btn-primary" style="margin-left:4px;" title="Opens Zoom and starts the meeting as host" onclick="startZoomAsHost('${esc(s.session_id)}', this)">▶ ${live ? 'Join now' : 'Start Zoom'}</button></div>` : `<div style="color:#B45309;display:flex;align-items:center;gap:6px;">🔗 No Zoom link yet <button class="btn btn-xs btn-ghost" onclick="generateZoomLink('${esc(s.session_id)}', this)">🎥 Generate</button></div>`}<div>💳 ${Number(s.fee) > 0 ? fmtMoney(s.fee) + ' admission fee' : 'Free session'}</div></div>
+      <div style="display:flex;gap:14px;margin-top:11px;">${[['Registered', s.registered, 'var(--blue)'], ['Paid', s.paid, 'var(--green)'], ['Pending Pay', s.pending_pay, 'var(--yellow)'], ['Capacity', s.capacity, 'var(--red)']].map(([l, v, c]) => `<div style="text-align:center;"><div style="font-family:var(--font-h);font-size:18px;font-weight:800;color:${c};">${fmtInt(v)}</div><div style="font-size:11px;color:var(--t3);">${l}</div></div>`).join('')}</div>
+      <div class="prog" style="margin-top:7px;"><div class="prog-f" style="width:${Math.min(cap, 100)}%;background:var(--blue);"></div></div><div style="font-size:11px;color:var(--t3);margin-top:3px;">${cap}% capacity</div></div>`;
+  }).join('') : `<div style="grid-column:1/-1;">${emptyState('📅', filtering ? 'No upcoming sessions match your filters.' : 'No upcoming sessions. Click "+ Create New Session" to add one.')}</div>`);
+
+  const more = document.getElementById('a-past-more');
+  if (more) {
+    const shown = Math.min(aPastShown, past.length);
+    more.style.display = past.length ? 'flex' : 'none';
+    more.innerHTML = `<span>Showing the ${shown === past.length ? '' : shown + ' most recent of '}${past.length} past session${past.length === 1 ? '' : 's'}${filtering ? ' that match' : ''}.${shown < past.length ? ' Use the search or date range above to find an older one.' : ''}</span>${shown < past.length ? `<button class="btn btn-sm btn-ghost" onclick="showMorePastSessions()">Show ${Math.min(PAST_PAGE, past.length - shown)} more</button>` : ''}`;
+  }
+  setHtml('a-sess-past', past.length ? past.slice(0, aPastShown).map(s => {
+    const cancelled = s.status === 'Cancelled';
+    const synced = Number(s.log_count) > 0;
+    const sync = cancelled ? '<span class="badge bg-gr">Cancelled</span>' : synced ? '<span class="badge bg-g">✓ Synced</span>' : Number(s.registered) ? '<span class="badge bg-y">⏳ Awaiting Sync</span>' : '<span class="badge bg-gr">No registrations</span>';
+    const action = cancelled ? '—' : `<button class="btn btn-xs ${synced ? 'btn-ghost' : 'btn-red'}" onclick="goToAttendance('${esc(s.session_id)}')">${synced ? 'View Certs' : 'Sync Now'}</button>`;
+    return `<tr><td class="nc">${esc(s.title)}</td><td>${fmtDateShort(s.start)}</td><td>${areaBadge(s.area)}</td><td>${fmtInt(s.attended)}/${fmtInt(s.registered)}</td><td><span class="badge ${Number(s.certs) ? 'bg-g' : 'bg-y'}">${Number(s.certs) ? fmtInt(s.certs) : 'None'}</span></td><td>${fmtMoney(s.revenue)}</td><td>${sync}</td><td>${action}</td></tr>`;
+  }).join('') : emptyRow(8, filtering ? 'No past sessions match your filters.' : 'No past sessions yet.'));
+
+  setHtml('a-sess-drafts', drafts.length ? drafts.map(s => `
+    <div class="card cp" style="border:2px dashed var(--border);"><span class="badge bg-gr" style="margin-bottom:9px;">Draft</span><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:5px;">${esc(s.title)}</div><div style="font-size:12px;color:var(--t3);margin-bottom:11px;">Created ${fmtDate(s.created_at)} · planned for ${fmtDate(s.start)}</div><div style="display:flex;gap:7px;flex-wrap:wrap;"><button class="btn btn-sm btn-red" onclick="openSessionEditor('${esc(s.session_id)}')">Continue Editing</button><button class="btn btn-sm btn-ghost" onclick="publishDraft('${esc(s.session_id)}')">Publish</button><button class="btn btn-sm btn-danger" onclick="handleDeleteDraft('${esc(s.session_id)}')">Delete</button></div></div>`).join('')
+    : `<div style="grid-column:1/-1;">${emptyState('📝', filtering ? 'No drafts match your filters.' : 'No drafts.')}</div>`);
 }
-function publishSession() {
-  const title = document.getElementById('acs-title')?.value.trim();
-  // BACKEND HOOK: POST /api/sessions { status: 'published', ... }
-  sessionsData.upcoming++;
-  showToast(title ? `"${title}" published! Members can now see it.` : 'Session published! Members can now see it.', 'success');
-  closeMo('a-create-session');
+function goToAttendance(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId);
+  if (s && !Number(s.log_count)) { aOpenSync(sessionId); return; }     // not synced yet → sync tab
+  aShowPage('attendance');
+  const f = document.getElementById('a-cert-filter'); if (f && [...f.options].some(o => o.value === sessionId)) { f.value = sessionId; renderAdminCertificates(); }
 }
-function saveSessionChanges() {
-  // BACKEND HOOK: PUT /api/sessions/:id  → then trigger email notifications server-side
-  showToast('Session updated. Members notified.', 'success');
-  closeMo('a-edit-session');
-}
-function handleCancelSession(btn, title) {
-  if (!confirm(`Cancel "${title}"? Registered members will be notified.`)) return;
-  // BACKEND HOOK: DELETE /api/sessions/:id
-  const card = btn.closest('.card');
-  card.style.opacity = '0.4';
-  card.style.pointerEvents = 'none';
-  showToast(`"${title}" cancelled. Registrants notified.`, 'error');
-}
-function handleDeleteDraft(btn) {
-  if (!confirm('Delete this draft? This cannot be undone.')) return;
-  // BACKEND HOOK: DELETE /api/sessions/:id
-  btn.closest('.card').remove();
-  showToast('Draft deleted.', 'error');
-}
-function copyZoomLink(url) {
-  navigator.clipboard?.writeText(url).catch(()=>{});
+function copyZoomLink(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId);
+  if (!s?.zoom_join_url) return;
+  navigator.clipboard?.writeText(s.zoom_join_url).catch(() => {});
   showToast('Zoom link copied to clipboard.', 'success', 1800);
 }
 
-// ════════════════════════════════════════════════
-// ADMIN: Zoom attendance sync / certificate generation
-// (Attendance no longer comes from a manual CSV upload —
-// it's pulled directly from the Zoom API.)
-// ════════════════════════════════════════════════
-function aSimZoomSync() {
-  // BACKEND HOOK: replace this simulated delay with a real call to your
-  // server, which in turn calls the Zoom API (e.g. the "Meeting/Webinar
-  // Participant Reports" endpoint) for the selected session:
-  //
-  //   const sessionId = document.getElementById('a-sync-session').value;
-  //   const res = await fetch(`/api/sessions/${sessionId}/sync-zoom-attendance`, { method: 'POST' });
-  //   const result = await res.json(); // { attendees, qualified, belowThreshold }
-  //   ...render result...
-  //
-  const btn = document.getElementById('a-sync-btn');
-  const origText = btn.textContent;
-  btn.textContent = '⏳ Syncing...'; btn.disabled = true;
-  setTimeout(()=>{
-    btn.textContent = origText; btn.disabled = false;
-    document.getElementById('a-sync-res').classList.add('show');
-    showToast('Attendance synced from Zoom.', 'success');
-  },1200);
+// Create / edit session form (one modal for both)
+function openSessionEditor(sessionId) {
+  const s = sessionId ? (ad().sessions || []).find(x => x.session_id === sessionId) : null;
+  editingSessionId = s ? s.session_id : null;
+  const v = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  setText('acs-heading', s ? '✏️ Edit Session' : '📅 Create New Session');
+  const parts = s ? manilaParts(s.start) : null;
+  v('acs-title', s?.title); v('acs-speaker', s?.speaker === 'To be announced' ? '' : s?.speaker); v('acs-speaker-title', s?.speaker_title);
+  v('acs-date', parts?.date); v('acs-time', parts?.time || '14:00'); v('acs-duration', s?.duration ?? 90);
+  v('acs-capacity', s?.capacity ?? 200); v('acs-zoom', s?.zoom_join_url); v('acs-fee', s ? Number(s.fee) : 0);
+  v('acs-accreditation', s?.accreditation); v('acs-desc', s?.description);
+  const area = document.getElementById('acs-area'); if (area && s?.area) area.value = s.area;
+  const type = document.getElementById('acs-type'); if (type) type.value = s?.type || 'Webinar';
+  const warn = document.getElementById('acs-warning');
+  if (s && Number(s.registered) > 0) { warn.style.display = 'block'; warn.textContent = `⚠ ${fmtInt(s.registered)} member(s) are registered. They are not notified automatically — please let them know about changes.`; }
+  else warn.style.display = 'none';
+  document.getElementById('acs-err').style.display = 'none';
+  SESSION_FIELDS.forEach(id => setFieldError(id, ''));
+  renderZoomFieldStatus(s);
+  let footer;
+  if (!s) footer = `<button class="btn btn-ghost" onclick="saveSession('Draft')">Save as Draft</button><button class="btn btn-red" onclick="saveSession('Upcoming')">Publish Session</button>`;
+  else if (s.status === 'Draft') footer = `<button class="btn btn-ghost" onclick="saveSession('Draft')">Save Draft</button><button class="btn btn-red" onclick="saveSession('Upcoming')">Publish</button>`;
+  else footer = `<button class="btn btn-ghost" onclick="closeMo('a-create-session')">Cancel</button><button class="btn btn-red" onclick="saveSession(null)">Save Changes</button>`;
+  setHtml('acs-footer', footer);
+  openMo('a-create-session');
 }
-function handleGenerateCertificates(count) {
-  // BACKEND HOOK: POST /api/sessions/:id/certificates { autoEmail: true }
-  showToast(`🎉 Generating ${count} certificates... Members will be emailed automatically.`, 'success', 4000);
-}
-function handleDownloadAllZip() {
-  // BACKEND HOOK: GET /api/certificates/export?format=zip
-  showToast('Downloading all certificates as ZIP...', 'info');
-}
-function handleBulkSend() {
-  // BACKEND HOOK: POST /api/certificates/bulk-send
-  showToast('Bulk emailing certificates...', 'success');
-}
-function handlePendingCert() {
-  showToast('DOLE Compliance — sync attendance from Zoom first to generate certificates.', 'info');
-}
-function handleResendCert(name) {
-  // BACKEND HOOK: POST /api/certificates/:id/resend
-  showToast(`Resending certificate email to ${name}...`, 'success');
-}
-function handleOverrideCert(btn, name) {
-  if (!confirm(`Force-issue a certificate for ${name} even though they're below threshold? This will be logged.`)) return;
-  // BACKEND HOOK: POST /api/certificates/override { memberName, reason }
-  btn.outerHTML = '<span class="badge bg-y">⚠ Overridden</span>';
-  showToast(`Certificate override logged for ${name}.`, 'info');
-}
-
-// ════════════════════════════════════════════════
-// ADMIN: payments — VIEW ONLY.
-// Payment status is confirmed automatically by the HitPay webhook
-// (see US-3.1), so there's no manual Mark Paid / Waive action here —
-// the admin just opens a read-only Payment Details modal.
-// BACKEND HOOK: the row data below is currently inline in index.html;
-// swap it for GET /api/payments and pass the fetched record straight
-// into openPaymentDetail(). The actual status change happens server-side
-// at POST /api/payments/hitpay-webhook, not from this UI.
-// ════════════════════════════════════════════════
-const paymentStatusBadge = {
-  paid:    '<span class="badge bg-g">✓ Paid</span>',
-  pending: '<span class="badge bg-y">⏳ Pending</span>',
-  waived:  '<span class="badge bg-p">🎁 Waived</span>'
+// ── Zoom connection (supabase/functions/zoom). Keys stay on the server. ──
+// ── Zoom connection (supabase/functions/zoom). Keys stay on the server. ──
+// Every failure says which setup step is missing, so the admin knows what to fix.
+const ZOOM_FIX = {
+  not_deployed:    'The "zoom" Edge Function is not deployed in Supabase yet (Edge Functions → Deploy a new function → name it zoom).',
+  secrets_missing: 'The Zoom secrets are missing in Supabase → Edge Functions → Secrets (ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET).',
+  sql_missing:     'Run supabase/12_session_fixes.sql in the Supabase SQL Editor.'
 };
-function openPaymentDetail(status, member, session, amount, method, date, extra) {
-  document.getElementById('apd-member').textContent  = member;
-  document.getElementById('apd-session').textContent = session;
-  document.getElementById('apd-amount').textContent  = amount;
-  document.getElementById('apd-method').textContent  = method;
-  document.getElementById('apd-date').textContent    = date;
-  document.getElementById('apd-status').innerHTML    = paymentStatusBadge[status] || status;
-
-  const extraRow   = document.getElementById('apd-extra-row');
-  const extraLabel = document.getElementById('apd-extra-label');
-  const extraVal   = document.getElementById('apd-extra');
-  if (status === 'paid' && extra) {
-    extraRow.style.display = 'flex';
-    extraLabel.textContent = 'Reference No.';
-    extraVal.textContent = extra;
-  } else if (status === 'waived' && extra) {
-    extraRow.style.display = 'flex';
-    extraLabel.textContent = 'Waiver Reason';
-    extraVal.textContent = extra;
-  } else {
-    extraRow.style.display = 'none';
+async function zoomCall(action, sessionId, extra) {
+  try {
+    const { data, error } = await sb.functions.invoke('zoom', { body: Object.assign({ action, session_id: sessionId }, extra || {}) });
+    if (!error) return { ok: true, data: data || {} };
+    let msg = '', code = '';
+    try { const b = await error.context.json(); if (b && b.error) { msg = b.error; code = b.code || ''; } } catch (_) { /* no JSON body */ }
+    const status = error.context && error.context.status;
+    if (!msg) {
+      // no answer from our function at all → it isn't deployed (or crashed on start)
+      if (status === 404 || /Failed to send a request/i.test(error.message || '')) code = 'not_deployed';
+      msg = ZOOM_FIX[code] || `Zoom request failed (${status || error.message || 'no response'}). Check Supabase → Edge Functions → zoom → Logs.`;
+    }
+    return { ok: false, reason: ZOOM_FIX[code] || msg, code };
+  } catch (e) {
+    return { ok: false, reason: ZOOM_FIX.not_deployed, code: 'not_deployed' };
   }
+}
+let zoomStatusCache = null;          // { ok, reason, at }
+async function zoomConnectionStatus(force) {
+  if (!force && zoomStatusCache && Date.now() - zoomStatusCache.at < 300000) return zoomStatusCache;
+  const z = await zoomCall('status');
+  const missing = z.ok ? (z.data.missing || []) : [];
+  const cantCreate = missing.find(m => m.key === 'create');
+  zoomStatusCache = { ok: z.ok && !cantCreate, missing, code: z.code || '', at: Date.now(),
+    reason: !z.ok ? (z.reason || '') : cantCreate ? `Your Zoom app is not allowed to create meetings. In Zoom Marketplace → your app → Scopes, add: ${missing.map(m => m.add).join(', ')} — then activate the app again.` : '' };
+  return zoomStatusCache;
+}
+// Creates/updates the Zoom meeting of a session and tells the admin what happened
+async function ensureZoomMeeting(sessionId, title, force) {
+  const z = await zoomCall('upsert_meeting', sessionId, force ? { force: true } : null);
+  if (z.ok && z.data.status === 'created') showToast(`🎥 Zoom meeting created for "${title}" — the link is on the session card.`, 'success', 4500);
+  else if (z.ok && z.data.status === 'updated') showToast('🎥 Zoom meeting updated to match the session.', 'success', 3500);
+  else if (!z.ok) showToast(`The session is saved, but the Zoom link could not be generated. ${z.reason}`, 'error', 10000);
+  if (!z.ok) zoomStatusCache = null;       // re-check the connection next time
+  return z;
+}
+// "Start Zoom" button: opens the meeting as host, no copy-pasting the link
+async function startZoomAsHost(sessionId, btn) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId); if (!s || !s.zoom_join_url) return;
+  // open the tab right away (browsers block tabs opened after waiting), then point it at Zoom
+  const tab = window.open('', '_blank');
+  if (tab) { try { tab.document.write('<p style="font-family:sans-serif;padding:24px;">Opening Zoom…</p>'); } catch (_) { /* ignore */ } }
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Opening…'; }
+  const z = await zoomCall('host_link', sessionId);
+  const url = z.ok && z.data.url ? z.data.url : s.zoom_join_url;
+  if (btn) { btn.disabled = false; btn.textContent = orig; }
+  if (!/^https:\/\//i.test(url)) { if (tab) tab.close(); showToast('This session\'s Zoom link is not valid. Open Edit and click Regenerate.', 'error', 6000); return; }
+  if (tab) tab.location.href = url; else window.location.href = url;
+  if (!(z.ok && z.data.status === 'host')) showToast('Opened the join link. To be the host, sign in to Zoom with the account that owns the meeting.', 'info', 6000);
+  logAdminAction('Opened Zoom meeting', s.title, { session_id: sessionId });
+}
+// "Generate Zoom link" button (session card + editor)
+async function generateZoomLink(sessionId, btn) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId); if (!s) return;
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+  const z = await ensureZoomMeeting(sessionId, s.title, true);
+  if (btn) { btn.disabled = false; btn.textContent = orig; }
+  if (z.ok) {
+    await loadAdminData();
+    const fresh = (ad().sessions || []).find(x => x.session_id === sessionId);
+    const f = document.getElementById('acs-zoom');
+    if (f && editingSessionId === sessionId) { f.value = fresh?.zoom_join_url || z.data.join_url || ''; renderZoomFieldStatus(fresh); }
+  }
+}
+// The line under the (locked) Zoom link field in the session editor
+async function renderZoomFieldStatus(s) {
+  const box = document.getElementById('acs-zoom-status'); if (!box) return;
+  const gen = s ? `<button type="button" class="btn btn-xs btn-ghost" onclick="generateZoomLink('${esc(s.session_id)}', this)">${s.zoom_join_url ? '⟳ Regenerate' : '🎥 Generate Zoom link'}</button>` : '';
+  if (s && s.zoom_join_url) { box.innerHTML = `<span style="color:var(--green);">✓ Zoom meeting ready.</span> <button type="button" class="btn btn-xs btn-primary" onclick="startZoomAsHost('${esc(s.session_id)}', this)">▶ Start Zoom</button> ${gen}`; return; }
+  box.innerHTML = '<span style="color:var(--t3);">Checking the Zoom connection…</span>';
+  const st = await zoomConnectionStatus();
+  if (box !== document.getElementById('acs-zoom-status')) return;
+  const warn = st.ok && st.missing && st.missing.length ? `<div style="flex-basis:100%;color:#B45309;">⚠ Still missing in your Zoom app (Scopes): ${st.missing.map(m => `${esc(m.label)} → <code>${esc(m.add)}</code>`).join('; ')}</div>` : '';
+  box.innerHTML = st.ok
+    ? `<span style="color:var(--green);">✓ Zoom is connected.</span> <span style="color:var(--t3);">The meeting link is generated automatically when you save.</span> ${gen}${warn}`
+    : `<span style="color:var(--red);">⚠ Zoom is not connected, so the link can't be generated yet.</span> <span style="color:var(--t2);">${esc(st.reason)}</span> ${gen}`;
+}
+// Creates/updates the Zoom meeting of a published session and tells the admin what happened
+
+// Same rules as 12_session_fixes.sql — wrong values are rejected, never silently changed
+function validateSessionForm(publishing, existing) {
+  const g = id => (document.getElementById(id)?.value || '').trim();
+  const errs = {};
+  const num = (id, label, { min, max, whole }) => {
+    const v = g(id);
+    if (v === '') { errs[id] = `${label} is required.`; return; }
+    if (!/^-?\d+(\.\d+)?$/.test(v)) { errs[id] = `${label} must be a number.`; return; }
+    const n = Number(v);
+    if (whole && !Number.isInteger(n)) errs[id] = `${label} must be a whole number.`;
+    else if (n < min) errs[id] = min === 0 ? `${label} cannot be negative. Enter 0 for a free session.` : `${label} must be at least ${min}.`;
+    else if (n > max) errs[id] = `${label} is too large (maximum ${max.toLocaleString()}).`;
+  };
+  if (!g('acs-title')) errs['acs-title'] = 'Session title is required.';
+  else if (g('acs-title').length > 150) errs['acs-title'] = 'Session title must be 150 characters or fewer.';
+  num('acs-fee', 'Admission fee', { min: 0, max: 1000000 });
+  num('acs-capacity', 'Capacity', { min: 1, max: 100000, whole: true });
+  num('acs-duration', 'Duration', { min: 1, max: 1440, whole: true });
+  if (!errs['acs-capacity'] && existing && Number(g('acs-capacity')) < Number(existing.registered || 0))
+    errs['acs-capacity'] = `Capacity cannot be lower than the ${existing.registered} member(s) already registered.`;
+  if (publishing) {
+    if (!g('acs-speaker')) errs['acs-speaker'] = 'A speaker name is required before publishing.';
+    if (!g('acs-date')) errs['acs-date'] = 'Pick a date before publishing.';
+    if (!g('acs-time')) errs['acs-time'] = 'Pick a time before publishing.';
+    if (g('acs-date') && g('acs-time')) {
+      const start = new Date(`${g('acs-date')}T${g('acs-time')}:00+08:00`);
+      const changed = !existing || existing.status === 'Draft' || Math.abs(new Date(existing.start) - start) > 59000;
+      if (changed && start <= Date.now()) errs['acs-date'] = 'The date and time are in the past.';
+    }
+  }
+  return errs;
+}
+const SESSION_FIELDS = ['acs-title', 'acs-speaker', 'acs-date', 'acs-time', 'acs-duration', 'acs-capacity', 'acs-fee'];
+async function saveSession(status) {
+  const g = id => (document.getElementById(id)?.value || '').trim();
+  const err = document.getElementById('acs-err');
+  const fail = t => { err.textContent = t; err.style.display = 'block'; };
+  err.style.display = 'none';
+  const existing = editingSessionId ? (ad().sessions || []).find(x => x.session_id === editingSessionId) : null;
+  const publishing = status === 'Upcoming' || (status === null && existing && existing.status !== 'Draft');
+  const errs = validateSessionForm(publishing, existing);
+  SESSION_FIELDS.forEach(id => setFieldError(id, errs[id] || ''));
+  const bad = Object.keys(errs);
+  if (bad.length) { document.getElementById(bad[0])?.focus(); return fail(bad.length === 1 ? errs[bad[0]] : 'Please fix the fields marked in red. Nothing was saved.'); }
+
+  const start = g('acs-date') ? `${g('acs-date')}T${g('acs-time') || '00:00'}:00+08:00` : '';
+  const data = {
+    title: g('acs-title'), description: g('acs-desc'), area: g('acs-area'), type: g('acs-type'),
+    speaker: g('acs-speaker'), speaker_title: g('acs-speaker-title'), accreditation: g('acs-accreditation'),
+    start, duration: g('acs-duration'), fee: g('acs-fee'), capacity: g('acs-capacity')
+  };
+  if (status) data.status = status;
+  const feeChanged = existing && Number(existing.fee) !== Number(data.fee) && Number(existing.registered) > 0;
+  if (feeChanged && !confirm(Number(data.fee) === 0
+      ? `Make "${data.title}" free? The ${existing.registered} registered member(s) who haven't paid will no longer owe anything and will get the Zoom link.`
+      : `Change the fee from ${fmtMoney(existing.fee)} to ${fmtMoney(data.fee)}? Registered members who haven't paid yet will owe the new amount.`)) return;
+  const btns = document.querySelectorAll('#acs-footer button'); btns.forEach(b => b.disabled = true);
+  try {
+    const wasEditing = !!editingSessionId;
+    const id = await rpc('admin_save_session', { p_id: editingSessionId, p_data: data });
+    const action = !wasEditing ? (status === 'Draft' ? 'Saved session draft' : 'Published session')
+      : status === 'Upcoming' ? 'Published session' : 'Edited session';
+    logAdminAction(action, data.title, { session_id: id });
+    closeMo('a-create-session');
+    showToast(status === 'Draft' ? 'Session saved as draft.' : status === 'Upcoming' ? `"${data.title}" published! Members can now see it.` : 'Session updated.', 'success');
+    await ensureZoomMeeting(id, data.title);          // Zoom link is always generated, never typed
+    await loadAdminData();
+  } catch (e) {
+    fail(friendlyAuthError(e));
+  } finally {
+    btns.forEach(b => b.disabled = false);
+  }
+}
+async function publishDraft(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId); if (!s) return;
+  // a draft must be complete before members can see it
+  const missing = [];
+  if (!s.speaker || s.speaker === 'To be announced') missing.push('a speaker name');
+  if (!s.start) missing.push('a date and time');
+  else if (new Date(s.start) <= Date.now()) missing.push('a date in the future');
+  if (!(Number(s.duration) >= 1)) missing.push('a duration of at least 1 minute');
+  if (!(Number(s.capacity) >= 1)) missing.push('a capacity of at least 1');
+  if (!(Number(s.fee) >= 0)) missing.push('a fee of 0 or more');
+  if (missing.length) {
+    showToast(`"${s.title}" can't be published yet — it needs ${missing.join(', ')}. Complete it, then publish.`, 'error', 7000);
+    openSessionEditor(sessionId);
+    return;
+  }
+  try {
+    await rpc('admin_set_session_status', { p_id: sessionId, p_status: 'Upcoming' });
+    logAdminAction('Published session', s.title, { session_id: sessionId });
+    showToast(`"${s.title}" published!`, 'success');
+    await ensureZoomMeeting(sessionId, s.title);
+    await loadAdminData();
+  } catch (e) { showToast(friendlyAuthError(e), 'error', 6000); openSessionEditor(sessionId); }
+}
+async function handleCancelSession(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId); if (!s) return;
+  if (!confirm(`Cancel "${s.title}"?${Number(s.registered) ? ` ${s.registered} member(s) are registered — you will need to inform them.` : ''}`)) return;
+  try {
+    await rpc('admin_set_session_status', { p_id: sessionId, p_status: 'Cancelled' });
+    logAdminAction('Cancelled session', s.title, { session_id: sessionId });
+    showToast(`"${s.title}" cancelled.`, 'error');
+    zoomCall('delete_meeting', sessionId);                 // best effort; nothing to do if Zoom isn't connected
+    await loadAdminData();
+  } catch (e) { showToast(friendlyAuthError(e), 'error', 5000); }
+}
+async function handleDeleteDraft(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId); if (!s) return;
+  if (!confirm(`Delete the draft "${s.title}"? This cannot be undone.`)) return;
+  try {
+    if (s.zoom_join_url) await zoomCall('delete_meeting', sessionId);   // remove its Zoom meeting too
+    await rpc('admin_delete_session', { p_id: sessionId });
+    logAdminAction('Deleted session draft', s.title, { session_id: sessionId });
+    showToast('Draft deleted.', 'error');
+    await loadAdminData();
+  } catch (e) { showToast(friendlyAuthError(e), 'error', 5000); }
+}
+
+// ── Attendance sync + certificates ──
+function renderSyncSelect() {
+  const sel = document.getElementById('a-sync-session'); if (!sel) return;
+  const keep = sel.value;
+  // every published session is listed, newest first; sessions that haven't started are labelled
+  const list = (ad().sessions || []).filter(s => s.status !== 'Draft' && s.status !== 'Cancelled').sort((a, b) => new Date(b.start) - new Date(a.start));
+  sel.innerHTML = `<option value="">${list.length ? '-- Select session --' : 'No published sessions yet'}</option>` +
+    list.map(s => `<option value="${esc(s.session_id)}">${esc(s.title)} · ${fmtDateShort(s.start)}${new Date(s.start) > Date.now() ? ' (not started)' : Number(s.log_count) === 0 && Number(s.registered) ? ' ⏳ needs sync' : ''}</option>`).join('');
+  if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+}
+// The attendance log shown after a sync: every registered member, whether Zoom saw them or not
+function attendanceLogHtml(log) {
+  const regs = (log && log.registrants) || [], un = (log && log.unmatched) || [];
+  const badge = r => ({ ATTENDED: '<span class="badge bg-g">✓ Attended ≥80%</span>', INCOMPLETE: '<span class="badge bg-y">Below 80%</span>', ABSENT: '<span class="badge bg-r">Absent</span>' }[r.attendance_status] || '<span class="badge bg-gr">Awaiting Zoom data</span>');
+  return `<div style="font-family:var(--font-h);font-size:13px;font-weight:700;margin:14px 0 6px;">📋 Attendance log — ${regs.length} registered member${regs.length === 1 ? '' : 's'}</div>
+    <div style="overflow-x:auto;background:white;border:1px solid var(--border);border-radius:var(--r2);"><table class="dt"><thead><tr><th>Member</th><th>Email</th><th>Payment</th><th>In Zoom report</th><th>Attendance</th><th>Result</th></tr></thead><tbody>
+    ${regs.length ? regs.map(r => `<tr><td class="nc">${esc(r.member || '—')}</td><td style="font-size:12px;color:var(--t3);">${esc(r.email || '')}</td><td>${esc((REG_PAY_LABEL[r.payment_status] || ['', r.payment_status || '—'])[1])}</td><td>${r.in_zoom ? '✓ Yes' : '—'}</td><td>${r.attendance_pct == null ? '—' : Math.round(r.attendance_pct) + '%'}</td><td>${badge(r)}</td></tr>`).join('') : emptyRow(6, 'No members have registered for this session.')}
+    </tbody></table></div>
+    ${un.length ? `<div style="font-size:12px;color:var(--t2);margin-top:8px;">❔ In the Zoom report but not matched to a member account: ${un.map(u => esc(u.email || 'no email')).join(', ')}</div>` : ''}`;
+}
+async function aSyncAttendance() {
+  const id = document.getElementById('a-sync-session').value;
+  const box = document.getElementById('a-sync-res');
+  if (!id) { showToast('Select a session first.', 'info'); return; }
+  const s = (ad().sessions || []).find(x => x.session_id === id);
+  const btn = document.getElementById('a-sync-btn'); const orig = btn.textContent;
+  btn.textContent = '⏳ Syncing...'; btn.disabled = true;
+  const dismiss = `<button class="btn btn-ghost btn-sm" onclick="document.getElementById('a-sync-res').classList.remove('show')">Dismiss</button>`;
+  const warn = (title, text, log) => {
+    box.style.background = 'var(--yellow-l)'; box.style.borderColor = '#FFE082';
+    box.innerHTML = `<div style="font-family:var(--font-h);font-size:13px;font-weight:700;color:#B45309;margin-bottom:7px;">${title}</div><div style="font-size:13px;color:var(--t2);line-height:1.6;">${text}</div>${log ? attendanceLogHtml(log) : ''}<div style="margin-top:11px;">${dismiss}</div>`;
+  };
+  try {
+    const getLog = async () => { try { return await rpc('admin_session_attendance', { p_session: id }); } catch (_) { return null; } };
+    if (s && new Date(s.start) > Date.now()) {
+      warn('This session hasn\'t started yet', `"${esc(s.title)}" starts ${fmtDate(s.start)} at ${fmtTime(s.start)}. Zoom attendance can be synced after the session ends.`, await getLog());
+      box.classList.add('show');
+      return;
+    }
+    // 1) pull the participant report from Zoom into attendance_logs
+    const z = await zoomCall('sync_attendance', id);
+    let zoomNote = '';
+    if (!z.ok) zoomNote = z.code === 'not_configured' ? 'Zoom is not connected yet, so attendance can\'t be pulled automatically (see ZOOM_SETUP.md).' : `Zoom could not be reached: ${esc(z.reason)}`;
+    else if (z.data.status === 'no_meeting') zoomNote = 'This session has no Zoom meeting created by the system, so there is no report to pull.';
+    else if (z.data.status === 'no_report') zoomNote = 'Zoom has no participant report for this meeting yet. Reports are ready a few minutes after the meeting ends — if nobody joined, there is nothing to report.';
+    // 2) match it against the registrations
+    const r = await rpc('admin_sync_attendance', { p_session: id });
+    const log = await getLog();
+    if (r.no_logs) {
+      warn('No Zoom attendance found', `${zoomNote || 'There are no Zoom attendance records for this session yet.'}<br>The registered members are listed below — nothing was changed.`, log);
+    } else {
+      box.style.background = ''; box.style.borderColor = '';
+      box.innerHTML = `<div style="font-family:var(--font-h);font-size:13px;font-weight:700;color:var(--green);margin-bottom:7px;">✅ Attendance synced — ${esc(s?.title)}</div>
+        <div style="font-size:13px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>👥 <strong>Zoom attendees:</strong> ${fmtInt(r.attendees)}</div><div>✅ <strong>Qualified (≥80%):</strong> ${fmtInt(r.qualified)} member(s)</div><div>❌ <strong>Below threshold / absent:</strong> ${fmtInt(r.below)} member(s)</div>${Number(r.unmatched) ? `<div>❔ <strong>Zoom rows not matched to an account:</strong> ${fmtInt(r.unmatched)}</div>` : ''}${zoomNote ? `<div style="color:#B45309;">ℹ ${zoomNote} Existing records were used.</div>` : ''}</div>
+        ${attendanceLogHtml(log)}
+        <div style="margin-top:11px;display:flex;gap:7px;">${Number(r.needs_certs) ? `<button class="btn btn-green btn-sm" onclick="handleGenerateCertificates('${esc(id)}')">Generate ${fmtInt(r.needs_certs)} Certificate${r.needs_certs == 1 ? '' : 's'}</button>` : ''}${dismiss}</div>`;
+      logAdminAction('Synced Zoom attendance', s?.title, r);
+    }
+    box.classList.add('show');
+    await loadAdminData();
+  } catch (e) {
+    showToast(friendlyAuthError(e), 'error', 5000);
+  } finally {
+    btn.textContent = orig; btn.disabled = false;
+  }
+}
+async function handleGenerateCertificates(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId);
+  try {
+    const n = await rpc('admin_generate_certificates', { p_session: sessionId });
+    logAdminAction('Generated certificates', s?.title, { count: n, session_id: sessionId });
+    showToast(n ? `🎉 ${n} certificate${n === 1 ? '' : 's'} created.` : 'Every qualified member already has a certificate.', 'success', 4000);
+    document.getElementById('a-sync-res').classList.remove('show');
+    await loadAdminData();
+  } catch (e) { showToast(friendlyAuthError(e), 'error', 5000); }
+}
+function renderAdminCertificates() {
+  const d = ad(), filter = document.getElementById('a-cert-filter')?.value || '';
+  const sessions = (d.sessions || []).filter(s => Number(s.registered) > 0 && s.status !== 'Draft' && (!filter || s.session_id === filter));
+  setHtml('a-cert-minis', sessions.length ? sessions.slice(0, 8).map(s => {
+    const a = areaStyle(s.area);
+    const has = Number(s.certs) > 0;
+    return `<div class="cert-mini" style="background:${has ? a.grad : 'linear-gradient(135deg,#B71C1C,#E53935)'};" onclick="${has ? `openCertTemplate('${esc(s.session_id)}')` : `handlePendingCert('${esc(s.session_id)}')`}"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">${has ? a.seal : '⏳'}</div><div class="cmit">${esc(s.title)}</div><div style="font-size:10px;opacity:.7;margin-top:2px;">${has ? fmtInt(s.certs) + ' issued' : (Number(s.log_count) ? 'Ready to generate' : 'Awaiting Sync')}</div></div></div>`;
+  }).join('') : `<div style="grid-column:1/-1;">${emptyState('🏆', 'No sessions with registrations yet.')}</div>`);
+
+  const regs = (d.registrations || []).filter(r => !filter || r.session_id === filter);
+  setHtml('a-cert-tbody', regs.length ? regs.map(r => {
+    const pct = r.attendance_pct;
+    const attBadge = pct == null ? (r.attendance_status === 'ABSENT' ? '<span class="badge bg-r">Absent</span>' : '<span class="badge bg-gr">No data</span>') : `<span class="badge ${pct >= 80 ? 'bg-g' : 'bg-r'}">${Math.round(pct)}%</span>`;
+    let cert, actions;
+    if (r.certificate_id) {
+      cert = r.cert_status === 'ISSUED' ? '<span class="badge bg-g">✓ Issued</span>' : r.cert_status === 'FAILED' ? '<span class="badge bg-r">✗ Failed</span>' : '<span class="badge bg-y">⏳ Pending</span>';
+      actions = `<div style="display:flex;gap:4px;"><button class="btn btn-xs btn-ghost" onclick="handleDownloadCert('${esc(r.cert_pdf)}')">⬇ PDF</button><button class="btn btn-xs btn-ghost" onclick="handleResendCert('${esc(r.registration_id)}')">Resend</button></div>`;
+    } else if (r.attendance_status === 'ATTENDED') {
+      cert = '<span class="badge bg-y">Not generated</span>';
+      actions = `<button class="btn btn-xs btn-green" onclick="handleGenerateCertificates('${esc(r.session_id)}')">Generate</button>`;
+    } else if (r.attendance_status === 'INCOMPLETE' || r.attendance_status === 'ABSENT') {
+      cert = '<span class="badge bg-r">✗ Not Qualified</span>';
+      actions = `<button class="btn btn-xs btn-ghost" onclick="handleOverrideCert('${esc(r.registration_id)}')">Override</button>`;
+    } else {
+      cert = '<span class="badge bg-gr">Awaiting sync</span>';
+      actions = '—';
+    }
+    return `<tr><td class="nc">${esc(r.member || r.email || '—')}</td><td>${esc(r.session)}</td><td>${attBadge}</td><td>${cert}</td><td>${r.email_sent_at ? '<span class="badge bg-g">✓ Sent</span>' : '—'}</td><td>${actions}</td></tr>`;
+  }).join('') : emptyRow(6, 'No attendance records yet. They appear after a session starts and members have registered.'));
+}
+function renderCertMonitor() {
+  const d = ad(), cs = d.cert_status || {};
+  setText('a-mon-issued', adminData ? fmtInt(cs.issued) : '—');
+  setText('a-mon-pending', adminData ? fmtInt(cs.pending) : '—');
+  setText('a-mon-failed', adminData ? fmtInt(Number(cs.failed || 0) + Number(cs.below || 0)) : '—');
+  const list = (d.sessions || []).filter(s => Number(s.registered) > 0 && isPastSession(s) && s.status !== 'Cancelled');
+  setHtml('a-mon-bars', list.length ? list.map((s, i) => {
+    const base = Number(s.attended) || 0, certs = Number(s.certs) || 0;
+    const c = certs && certs >= base ? 'var(--green)' : Number(s.log_count) ? 'var(--blue)' : 'var(--yellow)';
+    const pct = base ? Math.round(100 * Math.min(certs, base) / base) : 0;
+    return `<div class="cbr"><div class="cbl">${esc(s.title)}</div><div class="cbt"><div class="cbf" style="width:${pct}%;background:${c};"></div></div><div class="cbv" style="color:${c};">${Number(s.log_count) ? `${fmtInt(certs)}/${fmtInt(base)}` : 'Awaiting Sync'}</div></div>`;
+  }).join('') : emptyState('📊', 'No finished sessions yet.'));
+}
+function openCertTemplate(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId); if (!s) return;
+  document.getElementById('a-cd-preview').style.background = areaStyle(s.area).grad;
+  setText('a-cd-title', s.title);
+  setText('a-cd-sub', 'HR Calabarzon' + (s.accreditation ? ' · ' + s.accreditation + ' Accredited' : ''));
+  setText('a-cd-issued', `${fmtInt(s.certs)} certificate${Number(s.certs) === 1 ? '' : 's'}`);
+  setText('a-cd-date', fmtDate(s.start));
+  setText('a-cd-acc', s.accreditation || '—');
+  openMo('a-cert-detail');
+}
+function handlePendingCert(sessionId) {
+  const s = (ad().sessions || []).find(x => x.session_id === sessionId);
+  showToast(`${s ? s.title + ' — ' : ''}sync attendance from Zoom first to generate certificates.`, 'info', 4500);
+  aOpenSync(sessionId);
+}
+async function handleOverrideCert(registrationId) {
+  const r = (ad().registrations || []).find(x => x.registration_id === registrationId); if (!r) return;
+  const reason = prompt(`Force-issue a certificate for ${r.member} even though they're below the 80% threshold?\n\nReason (this will be logged):`);
+  if (reason === null) return;
+  if (!reason.trim()) { showToast('Please give a reason for the override.', 'error'); return; }
+  try {
+    await rpc('admin_override_certificate', { p_registration: registrationId, p_reason: reason.trim() });
+    showToast(`Certificate override logged for ${r.member}.`, 'info');
+    await loadAdminData();
+  } catch (e) { showToast(friendlyAuthError(e), 'error', 5000); }
+}
+const EMAIL_NOT_READY = 'Emailing certificates is not set up yet — it needs an email service connected to Supabase (for example an Edge Function).';
+function handleResendCert() { showToast(EMAIL_NOT_READY, 'info', 6000); }
+function handleBulkSend() { showToast(EMAIL_NOT_READY, 'info', 6000); }
+function handleDownloadAllZip() { showToast('Downloading all certificates as a ZIP is not set up yet — certificate PDFs are not generated yet.', 'info', 6000); }
+
+// ── Payments (read-only; status comes from the HitPay webhook) ──
+const PAYMENT_LABEL = {
+  PAID: ['bg-g', '✓ Paid'], PENDING_PAYMENT: ['bg-y', '⏳ To confirm'], UNPAID: ['bg-r', 'Not paid yet'], WAIVED: ['bg-p', '🎁 Waived'],
+  FAILED: ['bg-r', '✗ Failed'], CANCELLED: ['bg-gr', 'Cancelled'], REFUNDED: ['bg-b', '↩ Refunded']
+};
+const CHANNEL_LABEL = { GCASH: 'GCash', MAYA: 'Maya', CARD: 'Card', QR_PH: 'QR Ph', MANUAL_BANK: 'Bank transfer' };
+function paymentBadge(status) { const [c, t] = PAYMENT_LABEL[status] || ['bg-gr', status || '—']; return `<span class="badge ${c}">${t}</span>`; }
+// rows for the Payment page: admin_payments() when 13_payments.sql has run, else the old list
+function paymentRows() {
+  if (adminPayments) return adminPayments.map((p, n) => Object.assign({ key: p.transaction_id || 'reg-' + p.registration_id }, p));
+  return (ad().payments || []).map(p => Object.assign({ key: p.transaction_id }, p));
+}
+function filteredPayments() {
+  const sess = document.getElementById('a-pay-session')?.value || '';
+  const st = document.getElementById('a-pay-status')?.value || '';
+  const q = (document.getElementById('a-pay-search')?.value || '').trim().toLowerCase();
+  return paymentRows().filter(p => (!sess || p.session_id === sess) && (!st || p.status === st)
+    && (!q || [p.member, p.email, p.reference].some(v => String(v || '').toLowerCase().includes(q))));
+}
+function paymentActions(p) {
+  const view = `<button class="btn btn-xs btn-ghost" onclick="openPaymentDetail('${esc(p.key)}')">View</button>`;
+  if (!p.registration_id || p.session_status === 'Cancelled') return view;
+  if (p.status === 'PENDING_PAYMENT') return `<button class="btn btn-xs btn-green" onclick="openPaymentReview('${esc(p.key)}','confirm')">✓ Confirm</button><button class="btn btn-xs btn-danger" onclick="openPaymentReview('${esc(p.key)}','reject')">Reject</button>${view}`;
+  if (p.status === 'UNPAID' && p.reg_payment_status !== 'PAID') return `<button class="btn btn-xs btn-ghost" onclick="openPaymentReview('${esc(p.key)}','mark')">Mark as paid</button>`;
+  return view;
+}
+function renderPayments() {
+  const loaded = !!adminData, rows = paymentRows();
+  const sum = list => list.reduce((a, p) => a + Number(p.amount || 0), 0);
+  const toReview = rows.filter(p => p.status === 'PENDING_PAYMENT'), unpaid = rows.filter(p => p.status === 'UNPAID');
+  setText('a-pay-collected', loaded ? fmtMoney(sum(rows.filter(p => p.status === 'PAID'))) : '—');
+  setText('a-pay-pending', loaded ? fmtMoney(sum(toReview) + sum(unpaid)) : '—');
+  setText('a-pay-pending-lbl', loaded ? `To confirm (${fmtInt(toReview.length)}) · Unpaid (${fmtInt(unpaid.length)})` : 'Pending');
+  setText('a-pay-count', loaded ? fmtInt(rows.filter(p => p.transaction_id).length) : '—');
+
+  // "Needs your action": payments members submitted and are waiting for an admin
+  const box = document.getElementById('a-pay-review');
+  if (box) {
+    if (!adminPayments && loaded) {
+      box.style.display = 'block';
+      box.innerHTML = `<div class="rep-msg is-error" style="margin:0 0 14px;"><span>⚠</span><div><strong>Payments can't be confirmed yet.</strong> Run <code>supabase/13_payments.sql</code> in the Supabase SQL Editor, then reload this page.</div></div>`;
+    } else {
+      box.style.display = toReview.length ? 'block' : 'none';
+      box.innerHTML = toReview.length ? `<div class="card cp" style="border-left:4px solid var(--yellow);margin-bottom:14px;"><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:9px;">⏳ Waiting for your confirmation (${toReview.length})</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">${toReview.map(p => `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 11px;background:var(--bg);border-radius:var(--r2);"><div style="flex:1;min-width:200px;"><div class="nc">${esc(p.member || p.email)}</div><div style="font-size:12px;color:var(--t3);">${esc(p.session)} · ${fmtMoney(p.amount)} · ${esc(CHANNEL_LABEL[p.channel] || p.channel || '—')} · Ref <strong style="color:var(--t1);">${esc(p.reference || '—')}</strong> · sent ${fmtDateShort(p.submitted_at || p.date)}</div></div><div style="display:flex;gap:6px;"><button class="btn btn-xs btn-green" onclick="openPaymentReview('${esc(p.key)}','confirm')">✓ Confirm</button><button class="btn btn-xs btn-danger" onclick="openPaymentReview('${esc(p.key)}','reject')">Reject</button></div></div>`).join('')}</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:8px;">Check the reference number against your GCash / Maya / bank records before confirming. Confirming releases the member's Zoom link.</div></div>` : '';
+    }
+  }
+  const colors = [['var(--blue-l)', 'var(--blue)'], ['var(--yellow-l)', '#B45309'], ['var(--green-l)', 'var(--green)'], ['var(--red-l)', 'var(--red)']];
+  const list = filteredPayments();
+  setHtml('a-payments-tbody', list.length ? list.map((p, i) => {
+    const [bg, fg] = colors[i % colors.length];
+    return `<tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${fg};">${esc(initialsOf(p.member))}</div><div class="nc">${esc(p.member || p.email || '—')}</div></div></td><td>${esc(p.session || '—')}</td><td style="font-weight:700;">${fmtMoney(p.amount)}</td><td>${p.channel ? esc(CHANNEL_LABEL[p.channel] || p.channel) : '—'}${p.reference ? `<div style="font-size:11px;color:var(--t3);">Ref ${esc(p.reference)}</div>` : ''}</td><td>${fmtDateShort(p.date)}</td><td>${paymentBadge(p.status)}</td><td><div style="display:flex;gap:5px;flex-wrap:wrap;">${paymentActions(p)}</div></td></tr>`;
+  }).join('') : emptyRow(7, paymentRows().length ? 'No payments match your filters.' : 'No payments yet. Members who register for a paid session appear here.'));
+}
+function openPaymentDetail(key) {
+  const p = paymentRows().find(x => x.key === key); if (!p) return;
+  setText('apd-member', p.member || p.email || '—');
+  setText('apd-session', p.session || '—');
+  setText('apd-amount', fmtMoney(p.amount) + (p.currency && p.currency !== 'PHP' ? ' ' + p.currency : ''));
+  setText('apd-method', CHANNEL_LABEL[p.channel] || p.channel || '—');
+  setText('apd-date', p.date ? `${fmtDate(p.date)} ${fmtTime(p.date)}` : '—');
+  setHtml('apd-status', paymentBadge(p.status));
+  const row = document.getElementById('apd-extra-row');
+  const extra = p.status === 'FAILED' && p.rejection_reason ? ['Rejected because', p.rejection_reason]
+    : (p.reference || p.hitpay_ref || p.order_ref) ? ['Reference No.', p.reference || p.hitpay_ref || p.order_ref] : null;
+  if (extra) { row.style.display = 'flex'; setText('apd-extra-label', extra[0]); setText('apd-extra', extra[1] + (p.reviewed_by ? ` · reviewed by ${p.reviewed_by}` : '')); }
+  else row.style.display = 'none';
   openMo('a-payment-detail');
 }
 
+// ── Confirm / reject / mark as paid (13_payments.sql) ──
+let reviewingPayment = null;
+function openPaymentReview(key, mode) {
+  const p = paymentRows().find(x => x.key === key); if (!p) return;
+  reviewingPayment = { p, mode };
+  const title = { confirm: '✓ Confirm Payment', reject: 'Reject Payment', mark: 'Mark as Paid' }[mode];
+  setText('apr-title', title);
+  setHtml('apr-summary', `<div><strong>${esc(p.member || p.email)}</strong></div><div style="color:var(--t2);">${esc(p.session)} · <strong>${fmtMoney(p.amount)}</strong></div>${p.reference ? `<div style="margin-top:4px;">${esc(CHANNEL_LABEL[p.channel] || p.channel || '')} · Ref <strong>${esc(p.reference)}</strong> · sent ${fmtDate(p.submitted_at || p.date)} ${fmtTime(p.submitted_at || p.date)}</div>` : ''}`);
+  document.getElementById('apr-mark').style.display = mode === 'mark' ? 'block' : 'none';
+  document.getElementById('apr-reject').style.display = mode === 'reject' ? 'block' : 'none';
+  setHtml('apr-note', mode === 'confirm' ? 'Only confirm after you have found this reference number in your GCash / Maya / bank records. The member gets their Zoom link right away.'
+    : mode === 'mark' ? 'Use this when the member paid some other way (cash, deposit…). The member gets their Zoom link right away.'
+    : 'The member will see your reason on their Payment page and can submit a corrected reference.');
+  ['apr-channel', 'apr-ref', 'apr-reason'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; setFieldError(id, ''); });
+  document.getElementById('apr-err').style.display = 'none';
+  const btn = document.getElementById('apr-go');
+  btn.className = 'btn ' + (mode === 'reject' ? 'btn-danger' : 'btn-green');
+  btn.textContent = mode === 'reject' ? 'Reject payment' : mode === 'mark' ? 'Mark as paid' : 'Confirm payment';
+  openMo('a-pay-review-mo');
+}
+async function submitPaymentReview() {
+  if (!reviewingPayment) return;
+  const { p, mode } = reviewingPayment;
+  const g = id => (document.getElementById(id)?.value || '').trim();
+  const err = document.getElementById('apr-err'); err.style.display = 'none';
+  if (mode === 'mark') {
+    const ref = g('apr-ref').replace(/\s+/g, '');
+    setFieldError('apr-channel', g('apr-channel') ? '' : 'Choose how the member paid.');
+    setFieldError('apr-ref', /^[A-Za-z0-9-]{6,40}$/.test(ref) ? '' : 'Enter the receipt / reference number (6–40 letters or numbers).');
+    if (!g('apr-channel') || !/^[A-Za-z0-9-]{6,40}$/.test(ref)) return;
+  }
+  if (mode === 'reject') {
+    setFieldError('apr-reason', g('apr-reason') ? '' : 'Tell the member what to fix.');
+    if (!g('apr-reason')) return;
+  }
+  const btn = document.getElementById('apr-go'); btn.disabled = true;
+  try {
+    if (mode === 'reject') {
+      await rpc('admin_reject_payment', { p_registration: p.registration_id, p_reason: g('apr-reason') });
+      showToast(`Payment from ${p.member || p.email} rejected. They can resubmit it.`, 'error', 4500);
+    } else {
+      await rpc('admin_confirm_payment', { p_registration: p.registration_id, p_channel: mode === 'mark' ? g('apr-channel') : null, p_reference: mode === 'mark' ? g('apr-ref') : null });
+      showToast(`✓ Payment confirmed — ${p.member || p.email} can now join "${p.session}".`, 'success', 4500);
+    }
+    closeMo('a-pay-review-mo');
+    await loadAdminData();
+  } catch (e) {
+    err.textContent = friendlyAuthError(e); err.style.display = 'block';
+  } finally { btn.disabled = false; }
+}
+
 // ════════════════════════════════════════════════
-// CONFETTI (pure client-side, no backend needed)
+// FORM VALIDATION  (same rules as 08_validation.sql)
+// Every field shows its own red message under the input.
+// ════════════════════════════════════════════════
+const NAME_BAD_CHARS = /[0-9!@#$%^&*()_+=\[\]{};:"\\|<>/?~`,]/;
+const ID_REGEX = /^HRC-\d{4}-\d{4}$/i;
+
+// Philippine mobile: +63 and exactly 10 digits starting with 9.
+// Accepts 09171234567 · +63 917 123 4567 · 639171234567 · 9171234567
+function normalizePhPhone(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return { ok: false, empty: true, msg: 'Phone number is required.' };
+  if (/[^0-9+()\s.-]/.test(s)) return { ok: false, msg: 'Use numbers only, e.g. +63 917 123 4567.' };
+  const d = s.replace(/\D/g, '');
+  // the 10-digit local part: after +63 / 63, or after the leading 0
+  const local = s.startsWith('+') || (d.startsWith('63') && d.length > 10) ? d.replace(/^63/, '') : d.replace(/^0/, '');
+  if (s.startsWith('+') && !d.startsWith('63')) return { ok: false, msg: 'Only Philippine numbers are accepted — start with +63 or 09.' };
+  if (local.length !== 10) {
+    return { ok: false, msg: `Invalid number — it needs +63 followed by exactly 10 digits (you entered ${local.length}). Example: +63 917 123 4567.` };
+  }
+  if (local[0] !== '9') return { ok: false, msg: 'Invalid number — a PH mobile number starts with 9 after +63 (e.g. +63 917 123 4567).' };
+  return { ok: true, value: `+63 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}` };
+}
+
+const RULES = {
+  name(v, { full = true } = {}) {
+    v = v.trim().replace(/\s+/g, ' ');
+    if (!v) return 'Full name is required.';
+    if (v.length < 2 || v.length > 100) return 'Full name must be 2 to 100 characters.';
+    if (NAME_BAD_CHARS.test(v)) return 'Use letters only (spaces, periods, apostrophes and hyphens are allowed).';
+    if (full && !v.includes(' ')) return 'Please enter both first and last name.';
+    return '';
+  },
+  email(v) {
+    v = v.trim().toLowerCase();
+    if (!v) return 'Email address is required.';
+    if (v.length > 254 || !EMAIL_REGEX.test(v) || v.includes('..')) return 'Enter a valid email address, e.g. name@gmail.com.';
+    const dom = v.split('@')[1];
+    if (DOMAIN_TYPOS[dom]) return `Did you mean ${v.split('@')[0]}@${DOMAIN_TYPOS[dom]}?`;
+    return '';
+  },
+  password(v, { required = true } = {}) {
+    if (!v) return required ? 'Password is required.' : '';
+    if (v.length < 8) return `Password must be at least 8 characters (now ${v.length}).`;
+    if (v.length > 72) return 'Password must be at most 72 characters.';
+    if (!/[A-Za-z]/.test(v) || !/[0-9]/.test(v)) return 'Password must include both letters and numbers.';
+    return '';
+  },
+  phone(v, { required = true } = {}) {
+    if (!v.trim()) return required ? 'Phone number is required.' : '';
+    const r = normalizePhPhone(v);
+    return r.ok ? '' : r.msg;
+  },
+  select(label) { return v => v ? '' : `Please choose ${label}.`; },
+  text(label, { required = true } = {}) {
+    return v => {
+      v = v.trim();
+      if (!v) return required ? `${label} is required.` : '';
+      if (v.length < 2 || v.length > 100) return `${label} must be 2 to 100 characters.`;
+      return '';
+    };
+  },
+  memberId(v) {
+    v = v.trim();
+    if (!v) return '';
+    return ID_REGEX.test(v) ? '' : 'Member ID must look like HRC-2026-0001 (or leave it blank).';
+  }
+};
+
+function fieldErrorEl(input) {
+  const box = input.closest('.fg2') || input.closest('.fg') || input.parentElement;
+  let el = box.querySelector(':scope > .fld-err');
+  if (!el) { el = document.createElement('div'); el.className = 'fld-err'; box.appendChild(el); }
+  return el;
+}
+function setFieldError(id, msg) {
+  const input = document.getElementById(id); if (!input) return;
+  input.classList.toggle('is-invalid', !!msg);
+  const el = fieldErrorEl(input);
+  el.textContent = msg || '';
+  el.style.display = msg ? 'block' : 'none';
+}
+function clearFormErrors(ids) { ids.forEach(id => setFieldError(id, '')); }
+
+// Rules for the Add / Edit Member page (depends on add vs edit and role)
+function profileFormRules() {
+  return {
+    'ep-name': v => RULES.name(v, { full: false }),
+    'ep-email': v => RULES.email(v),
+    'ep-phone': v => RULES.phone(v, { required: false }),
+    'ep-company': RULES.text('Company', { required: false }),
+    'ep-department': RULES.text('Department', { required: false }),
+    'ep-position': RULES.text('Position', { required: false })
+  };
+}
+// Checks every field; shows all errors; focuses the first wrong one
+function runValidation(rules) {
+  let first = null;
+  Object.entries(rules).forEach(([id, rule]) => {
+    const el = document.getElementById(id); if (!el) return;
+    const msg = rule(el.value || '');
+    setFieldError(id, msg);
+    if (msg && !first) first = el;
+  });
+  if (first) { first.focus(); first.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  return !first;
+}
+// Live checks: clear the message while typing, re-check when leaving a field
+function attachLiveValidation(rulesFn) {
+  Object.keys(rulesFn()).forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.liveVal) return;
+    el.dataset.liveVal = '1';
+    el.addEventListener('input', () => { if (el.classList.contains('is-invalid')) setFieldError(id, ''); });
+    el.addEventListener('change', () => { const r = rulesFn()[id]; if (r) setFieldError(id, r(el.value || '')); });
+    el.addEventListener('blur', () => {
+      if (/phone$/.test(id)) { const p = normalizePhPhone(el.value); if (p.ok) el.value = p.value; }
+      const r = rulesFn()[id]; if (r && el.value) setFieldError(id, r(el.value || ''));
+    });
+  });
+}
+// Server messages (08_validation.sql) → the matching field
+function showServerFieldError(e, prefix) {
+  const m = (e && e.message) || '';
+  const map = [[/phone/i, 'phone'], [/full name/i, 'name'], [/email/i, 'email'], [/password/i, 'pass'], [/province/i, 'province'],
+               [/company/i, 'company'], [/department/i, 'department'], [/position/i, 'position'], [/expertise/i, 'expertise'], [/member id/i, 'mid']];
+  const hit = map.find(([re]) => re.test(m));
+  if (hit && document.getElementById(`${prefix}-${hit[1]}`)) { setFieldError(`${prefix}-${hit[1]}`, m); return true; }
+  return false;
+}
+
+// ════════════════════════════════════════════════
+// MEMBER MANAGEMENT  (functions in 06_member_management.sql)
+//   Super admin  → View · Edit · Archive · Restore · add members/admins
+//   Normal admin → View · Archive · add members (no editing, no admins)
+// ════════════════════════════════════════════════
+function renderAdminIdentity() {
+  setText('a-sb-role', isSuperAdmin() ? '🛡 Super Admin Panel' : '🛡 Admin Panel');
+}
+function memberActions(m) {
+  const sup = isSuperAdmin(), id = esc(m.user_id);
+  const acts = [{ key: 'view', label: '👁 View details', call: `handleViewMember('${id}')` }];
+  if (!adminMembers) return acts;                           // 06 not installed yet
+  if (m.archived) {
+    if (sup) acts.push({ key: 'restore', label: '♻ Restore', cls: 'good', call: `restoreMember('${id}')` });
+    return acts;
+  }
+  if (sup || m.role === 'member') acts.push({ key: 'edit', label: '✏️ Edit', call: `openEditMember('${id}')` });
+  if (sup || m.role === 'member') acts.push({ key: 'archive', label: '🗄 Archive', cls: 'danger', call: `openArchiveMember('${id}')` });
+  return acts;
+}
+function openActMenu(ev, userId) {
+  ev.stopPropagation();
+  const menu = document.getElementById('act-menu');
+  const m = membersSource().find(x => x.user_id === userId); if (!m || !menu) return;
+  if (menu.classList.contains('open') && menu.dataset.user === userId) { closeActMenu(); return; }
+  const acts = memberActions(m);
+  menu.innerHTML = `<div class="act-head">${esc(m.full_name || m.email)}</div>` + acts.map((a, i) =>
+    (a.cls === 'danger' || a.cls === 'good') && i ? `<div class="act-sep"></div><button class="act-item ${a.cls}" onclick="closeActMenu();${a.call}">${a.label}</button>`
+      : `<button class="act-item ${a.cls || ''}" onclick="closeActMenu();${a.call}">${a.label}</button>`).join('');
+  menu.dataset.user = userId;
+  menu.classList.add('open');
+  const r = ev.currentTarget.getBoundingClientRect();
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+  menu.style.top = (r.bottom + h + 8 > window.innerHeight ? r.top - h - 4 : r.bottom + 4) + 'px';
+}
+function closeActMenu() {
+  document.getElementById('act-menu')?.classList.remove('open');
+  document.querySelectorAll('.nav-item.dd-open').forEach(x => x.classList.remove('dd-open'));
+}
+
+document.addEventListener('click', e => { if (!e.target.closest('#act-menu')) closeActMenu(); });
+window.addEventListener('scroll', closeActMenu, true);
+window.addEventListener('resize', closeActMenu);
+
+// ── Add / Edit Member page ──
+
+// ── Archive (remove) / Restore ──
+function openArchiveMember(userId) {
+  const m = membersSource().find(x => x.user_id === userId); if (!m) return;
+  archiveTargetId = userId;
+  const sup = isSuperAdmin();
+  setText('aa-title', `🗄 Archive ${m.full_name}`);
+  setText('aa-text', `${m.full_name} (${m.member_id || m.email}) will be hidden from the member list and will no longer be able to sign in. `
+    + 'Their attendance and certificates are kept.' + (sup ? ' You can restore the account later from the "Archived" filter.' : ' A super admin can restore the account if needed.'));
+  document.getElementById('aa-reason').value = '';
+  document.getElementById('aa-err').style.display = 'none';
+  setText('aa-btn', 'Archive');
+  openMo('a-archive-modal');
+}
+async function confirmArchiveMember() {
+  const btn = document.getElementById('aa-btn'); btn.disabled = true;
+  try {
+    await rpc('admin_archive_member', { p_user: archiveTargetId, p_reason: document.getElementById('aa-reason').value.trim() || null });
+    closeMo('a-archive-modal');
+    showToast('Account archived.', 'info');
+    await loadAdminData();
+  } catch (e) {
+    const err = document.getElementById('aa-err'); err.textContent = friendlyAuthError(e); err.style.display = 'block';
+  } finally { btn.disabled = false; }
+}
+async function restoreMember(userId) {
+  const m = membersSource().find(x => x.user_id === userId); if (!m) return;
+  if (!confirm(`Restore ${m.full_name}? They will be able to sign in again.`)) return;
+  try {
+    await rpc('admin_restore_member', { p_user: userId });
+    showToast(`${m.full_name} was restored.`, 'success');
+    await loadAdminData();
+  } catch (e) { showToast(friendlyAuthError(e), 'error', 5000); }
+}
+
+// ── Admin: My Profile ──
+function renderAdminProfile() {
+  const me = adminMe;
+  if (!me) {
+    setText('a-prof-name', loggedInUser?.name || '—'); setText('a-prof-id', loggedInUser?.id || '—');
+    setText('a-prof-av', loggedInUser?.initials || '');
+    setHtml('a-prof-perms', 'Run <strong>06_member_management.sql</strong> in Supabase to enable profiles and member management.');
+    return;
+  }
+  setText('a-prof-av', initialsOf(me.full_name));
+  setText('a-prof-name', me.full_name || '—');
+  setText('a-prof-id', me.member_id || '—');
+  setHtml('a-prof-role', me.is_super ? ROLE_BADGE.super_admin : ROLE_BADGE.admin);
+  setText('a-prof-since', fmtDate(me.created_at));
+  setText('a-prof-last', me.last_sign_in ? `${fmtDate(me.last_sign_in)} ${fmtTime(me.last_sign_in)}` : '—');
+  [['fullname', me.full_name], ['email', me.email], ['phone', me.phone], ['province', me.province], ['company', me.company],
+   ['department', me.department], ['position', me.position]].forEach(([k, v]) => setText('a-prof-' + k, v || '—'));
+  setHtml('a-prof-perms', me.is_super
+    ? '✅ View all members and admins<br>✅ Edit area of expertise, mastery level and account status<br>✅ Change account type (Member / Admin / Super Admin)<br>✅ Archive and restore accounts<br>✅ Manage sessions, attendance, certificates and payments'
+    : '✅ View members<br>✅ Edit a member\'s area of expertise, mastery level and account status<br>✅ Archive members<br>✅ Manage sessions, attendance, certificates and payments<br>🔒 Restoring archived accounts is for super admins. Personal details are changed by each member from their own profile.');
+}
+async function sendMyPasswordReset() {
+  const email = adminMe?.email || loggedInUser?.email;
+  if (!email) return;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: EMAIL_LINK_URL });
+  if (error) showToast(friendlyAuthError(error), 'error', 6000);
+  else showToast(`A password reset link was sent to ${email}.`, 'success', 5000);
+}
+
+// ════════════════════════════════════════════════
+// MEMBER: PAYMENT page  (member_payments() in 09_member_payments.sql)
+// ════════════════════════════════════════════════
+let memberPayments = null;   // { transactions: [...], registrations: [...] }
+async function loadMemberPayments() {
+  try {
+    memberPayments = await rpc('member_payments');
+  } catch (e) {
+    console.warn('[Supabase] member_payments not available — run 09_member_payments.sql. Showing registrations only.', e);
+    // fallback: what member_dashboard already knows
+    const d = md();
+    memberPayments = {
+      fallback: true, transactions: [],
+      registrations: [
+        ...(d.upcoming || []).filter(s => s.is_registered).map(s => ({ session_id: s.session_id, session: s.title, start: s.start, fee: s.fee, payment_status: s.payment_status, session_status: s.status })),
+        ...(d.history || []).map(h => ({ session_id: h.session_id, session: h.title, start: h.start, fee: null, payment_status: h.payment_status, session_status: h.session_status }))
+      ]
+    };
+  }
+  renderMemberPayments();
+  updateMemberBadges();
+}
+function mp() { return memberPayments || { transactions: [], registrations: [] }; }
+// Where members send their payment. Fill these in with HR Calabarzon's real accounts.
+// Example: { method: 'GCash', name: 'HR Calabarzon', number: '0917 123 4567' }
+const PAYMENT_ACCOUNTS = [];
+let payingSessionId = null;
+function openSubmitPayment(sessionId) {
+  const r = (mp().registrations || []).find(x => x.session_id === sessionId);
+  const s = r || (md().upcoming || []).find(x => x.session_id === sessionId);
+  if (!s) { showToast('Register for the session first.', 'info'); return; }
+  payingSessionId = sessionId;
+  setHtml('msp-summary', `<div style="font-family:var(--font-h);font-weight:700;">${esc(s.session || s.title)}</div><div style="color:var(--t2);">${fmtDate(s.start)} · ${fmtTime(s.start)}</div><div style="font-size:20px;font-weight:800;margin-top:6px;">${fmtMoney(s.fee)}</div>`);
+  setHtml('msp-accounts', PAYMENT_ACCOUNTS.length
+    ? `<div style="font-size:12px;color:var(--t3);margin-bottom:5px;">Send the exact amount to:</div>` + PAYMENT_ACCOUNTS.map(a => `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--bg);border-radius:var(--r2);margin-bottom:5px;"><span><strong>${esc(a.method)}</strong> · ${esc(a.name || '')}</span><strong>${esc(a.number || '')}</strong></div>`).join('')
+    : `<div style="font-size:12px;color:var(--t2);">Pay using the GCash / Maya / bank details HR Calabarzon gave you, then enter the reference number below.</div>`);
+  ['msp-channel', 'msp-ref'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; setFieldError(id, ''); });
+  if (r?.pending_reference) document.getElementById('msp-ref').value = r.pending_reference;
+  document.getElementById('msp-err').style.display = 'none';
+  openMo('m-submit-payment');
+}
+async function submitMemberPayment() {
+  const ch = document.getElementById('msp-channel').value, ref = document.getElementById('msp-ref').value.trim().replace(/\s+/g, '');
+  setFieldError('msp-channel', ch ? '' : 'Choose how you paid.');
+  setFieldError('msp-ref', !ref ? 'Enter the reference number from your receipt.' : /^[A-Za-z0-9-]{6,40}$/.test(ref) ? '' : 'The reference number should be 6–40 letters or numbers, exactly as on your receipt.');
+  if (!ch || !/^[A-Za-z0-9-]{6,40}$/.test(ref)) return;
+  const btn = document.getElementById('msp-go'); btn.disabled = true;
+  const err = document.getElementById('msp-err'); err.style.display = 'none';
+  try {
+    await rpc('member_submit_payment', { p_session: payingSessionId, p_channel: ch, p_reference: ref });
+    closeMo('m-submit-payment');
+    showToast('Payment sent for confirmation. Your Zoom link unlocks once an admin confirms it.', 'success', 5000);
+    await Promise.all([loadMemberPayments(), loadMemberData()]);
+  } catch (e) {
+    err.textContent = friendlyAuthError(e); err.style.display = 'block';
+  } finally { btn.disabled = false; }
+}
+function memberDues() {
+  return (mp().registrations || []).filter(r => ['UNPAID', 'PENDING_PAYMENT'].includes(r.payment_status)
+    && r.session_status !== 'Cancelled' && Number(r.fee || 0) > 0);
+}
+const REG_PAY_LABEL = { UNPAID: ['bg-y', '⏳ Unpaid'], PENDING_PAYMENT: ['bg-y', '⏳ Payment pending'], PAID: ['bg-g', '✓ Paid'], FREE: ['bg-b', 'Free'], WAIVED: ['bg-p', '🎁 Waived'] };
+function renderMemberPayments() {
+  const tx = mp().transactions || [], regs = mp().registrations || [], loaded = !!memberPayments;
+  const paid = tx.filter(t => t.status === 'PAID').reduce((a, t) => a + Number(t.amount || 0), 0);
+  const dues = memberDues();
+  const due = dues.reduce((a, r) => a + Number(r.fee || 0), 0);
+  setText('mpay-paid', loaded ? fmtMoney(paid) : '—');
+  setText('mpay-due', loaded ? fmtMoney(due) : '—');
+  setText('mpay-due-lbl', loaded ? `Awaiting Payment (${dues.length})` : 'Awaiting Payment');
+  setText('mpay-count', loaded ? fmtInt(tx.length) : '—');
+
+  setHtml('mpay-dues', dues.length ? dues.map(r => {
+    const pending = r.payment_status === 'PENDING_PAYMENT';
+    const note = pending ? `<div style="font-size:12px;color:#B45309;margin-top:3px;">⏳ Sent${r.pending_reference ? ` (Ref ${esc(r.pending_reference)})` : ''} — waiting for an admin to confirm.</div>`
+      : r.rejected_reason ? `<div style="font-size:12px;color:var(--red);margin-top:3px;">✗ Your last payment was not accepted: ${esc(r.rejected_reason)} — please submit it again.</div>` : '';
+    const btn = memberPayments?.fallback ? '' : `<button class="btn btn-xs ${pending ? 'btn-ghost' : 'btn-primary'}" onclick="openSubmitPayment('${esc(r.session_id)}')">${pending ? 'Edit' : 'Submit payment'}</button>`;
+    return `<div class="m-hitem"><div class="m-hst" style="background:var(--yellow-l);color:#B45309;">₱</div><div class="m-hi"><h4>${esc(r.session)}</h4><p>${fmtDate(r.start)} · ${fmtTime(r.start)} · ${fmtMoney(r.fee)}</p>${note}</div><div class="m-ha" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;"><span class="badge ${pending ? 'bg-y' : 'bg-r'}">${pending ? '⏳ Waiting for confirmation' : 'Unpaid'}</span>${btn}</div></div>`;
+  }).join('') + `<div style="font-size:12px;color:var(--t3);margin-top:10px;line-height:1.6;">Pay the admission fee, then press <strong>Submit payment</strong> and enter the reference number from your receipt. Your Zoom link unlocks as soon as an admin confirms it.</div>`
+    : emptyState('✅', loaded ? 'Nothing to pay right now.' : 'Loading…'));
+
+  const st = document.getElementById('mpay-status')?.value || '';
+  const q = (document.getElementById('mpay-search')?.value || '').trim().toLowerCase();
+  const list = tx.filter(t => (!st || t.status === st) && (!q || String(t.session || '').toLowerCase().includes(q)));
+  setHtml('mpay-tbody', list.length ? list.map(t => `<tr><td class="nc">${esc(t.session || '—')}</td><td style="font-weight:700;">${fmtMoney(t.amount)}</td><td>${t.status === 'PAID' || t.status === 'REFUNDED' ? esc(CHANNEL_LABEL[t.channel] || t.channel || '—') : '—'}</td><td>${fmtDate(t.date)}</td><td style="font-size:12px;color:var(--t3);">${esc(t.reference || '—')}</td><td>${paymentBadge(t.status)}</td></tr>`).join('')
+    : emptyRow(6, memberPayments?.fallback ? 'Payment history needs the 09_member_payments.sql update in Supabase.' : tx.length ? 'No payments match your filters.' : 'No payments yet.'));
+}
+
+// ════════════════════════════════════════════════
+// ADMIN: Zoom attendance sync lives in Session and Attendance → "Attendance Sync" tab
+// ════════════════════════════════════════════════
+function aOpenSync(sessionId) {
+  aShowPage('sessions');
+  const tab = document.getElementById('a-tab-sync'); if (tab) aSwitchTab(tab, 'as-sync');
+  const sel = document.getElementById('a-sync-session');
+  if (sel && sessionId && [...sel.options].some(o => o.value === sessionId)) sel.value = sessionId;
+}
+
+// ════════════════════════════════════════════════
+// SIDEBAR QUICK VIEW — hover any sidebar item to preview what's inside
+// ════════════════════════════════════════════════
+function peekRows(rows) {
+  return rows.filter(Boolean).map(([k, v, cls]) => `<div class="pk-row"><span>${esc(k)}</span><strong class="${cls || ''}">${esc(v)}</strong></div>`).join('');
+}
+const NAV_PEEK = {
+  // ── member
+  'mn-profile': () => { const me = md().me || {}; return { icon: '👤', title: 'My Profile', body: peekRows([['Name', me.full_name || loggedInUser?.name || '—'], ['Member ID', loggedInUser?.id || '—'], ['Level', me.mastery_level || '—'], ['Province', me.province || '—']]) }; },
+  'mn-home': () => { const st = md().stats || {}, n = memberNextSession(); const has = Number(st.attended || 0) + Number(st.missed || 0) > 0;
+    return { icon: '🏠', title: 'Dashboard', body: peekRows([['Attendance', has ? st.rate + '%' : '—', has && st.rate >= 80 ? 'ok' : ''], ['Certificates', fmtInt(st.certificates)], ['Province rank', st.province_rank?.rank ? '#' + st.province_rank.rank : '—']]) + (n ? `<div class="pk-note">Next: ${esc(n.title)} · ${fmtDateShort(n.start)}</div>` : '') }; },
+  'mn-attendance': () => { const d = md(), st = d.stats || {}, n = memberNextSession(), nodes = d.skill_tree || [];
+    return { icon: '📅', title: 'Session and Attendance', body: peekRows([['Upcoming sessions', fmtInt((d.upcoming || []).length)], ['Registered', fmtInt((d.upcoming || []).filter(s => s.is_registered).length)], ['Attended / missed', `${fmtInt(st.attended)} / ${fmtInt(st.missed)}`]]) + (n ? `<div class="pk-note">Next: ${esc(n.title)} · ${fmtDateShort(n.start)} ${fmtTime(n.start)}</div>` : '<div class="pk-note">No upcoming sessions yet.</div>') }; },
+  'mn-career': () => { const d = md(), nodes = d.skill_tree || [], act = nodes.filter(x => x.status === 'IN_PROGRESS');
+    return { icon: '🗺', title: 'Career Path', body: nodes.length ? peekRows([['Mastery level', d.me?.mastery_level || '—'], ['Completed', `${nodes.filter(x => x.status === 'COMPLETED').length} of ${nodes.length}`, 'ok'], ['In progress', fmtInt(act.length)], ['Locked', fmtInt(nodes.filter(x => x.status === 'LOCKED').length)]]) + (act[0] ? `<div class="pk-note">Working on: ${esc(act[0].title)} · ${Math.round(act[0].progress)}%</div>` : '') : '<div class="pk-note">Your career path will appear here once it is set up.</div>' }; },
+  'mn-payments': () => { const tx = mp().transactions || [], dues = memberDues();
+    return { icon: '💳', title: 'Payment', body: peekRows([['Awaiting payment', dues.length ? `${dues.length} · ${fmtMoney(dues.reduce((a, r) => a + Number(r.fee || 0), 0))}` : 'None', dues.length ? 'warn' : 'ok'], ['Total paid', fmtMoney(tx.filter(t => t.status === 'PAID').reduce((a, t) => a + Number(t.amount || 0), 0))], ['Transactions', fmtInt(tx.length)]]) }; },
+  'mn-certificates': () => { const c = md().certificates || [];
+    return { icon: '🏆', title: 'Certificate', body: peekRows([['Earned', fmtInt(c.length)], ['Being prepared', fmtInt(c.filter(x => x.status !== 'ISSUED').length)]]) + (c[0] ? `<div class="pk-note">Latest: ${esc(c[0].title)} · ${fmtDateShort(c[0].issued_at)}</div>` : '<div class="pk-note">Attend ≥80% of a session to earn one.</div>') }; },
+  // ── admin / super admin
+  'an-profile': () => { const me = adminMe || {}; return { icon: '👤', title: 'My Profile', body: peekRows([['Name', me.full_name || loggedInUser?.name || '—'], ['Admin ID', me.member_id || loggedInUser?.id || '—'], ['Role', me.is_super ? 'Super Admin' : 'Admin'], ['Email', me.email || '—']]) }; },
+  'an-members': () => { const all = membersSource(), cur = all.filter(m => !m.archived);
+    return { icon: '👥', title: 'Data Management', body: peekRows([['Members', fmtInt(cur.filter(m => m.role === 'member').length)], isSuperAdmin() ? ['Admins', fmtInt(cur.filter(m => m.role !== 'member').length)] : null, ['New this month', fmtInt(ad().overview?.new_members_month)], ['Unconfirmed email', fmtInt(cur.filter(m => !m.email_confirmed).length), cur.some(m => !m.email_confirmed) ? 'warn' : ''], ['Archived', fmtInt(all.filter(m => m.archived).length)]]) }; },
+  'an-home': () => { const o = ad().overview || {};
+    return { icon: '📊', title: 'Analytic Dashboard', body: peekRows([['Avg. attendance', fmtPct(o.attendance_rate)], ['Sessions this year', fmtInt(o.sessions_year)], ['Certificates issued', fmtInt(o.certs_total)], ['Payments collected', fmtMoney(o.revenue_total)]]) }; },
+  'an-sessions': () => { const all = ad().sessions || [], up = all.filter(isUpcomingSession).sort((a, b) => new Date(a.start) - new Date(b.start)), o = ad().overview || {};
+    return { icon: '📅', title: 'Session and Attendance', body: peekRows([['Upcoming', fmtInt(up.length)], ['Drafts', fmtInt(all.filter(s => s.status === 'Draft').length)], ['Awaiting attendance sync', fmtInt(o.awaiting_sync), Number(o.awaiting_sync) ? 'warn' : 'ok']]) + (up[0] ? `<div class="pk-note">Next: ${esc(up[0].title)} · ${fmtDateShort(up[0].start)} · ${fmtInt(up[0].registered)} registered</div>` : '') }; },
+  'an-payments': () => { const o = ad().overview || {};
+    return { icon: '💳', title: 'Payment', body: peekRows([['Collected', fmtMoney(o.revenue_total)], ['Pending', `${fmtInt(o.pending_payments)} · ${fmtMoney(o.pending_amount)}`, Number(o.pending_payments) ? 'warn' : ''], ['Transactions', fmtInt(o.transactions)]]) }; },
+  'an-attendance': () => { const cs = ad().cert_status || {}, ready = (ad().registrations || []).filter(r => r.attendance_status === 'ATTENDED' && !r.certificate_id).length;
+    return { icon: '🏆', title: 'Certificate', body: peekRows([['Issued', fmtInt(cs.issued)], ['Pending', fmtInt(cs.pending)], ['Ready to generate', fmtInt(ready), ready ? 'warn' : ''], ['Below 80% / failed', fmtInt(Number(cs.below || 0) + Number(cs.failed || 0))]]) }; }
+};
+let peekTimer = null;
+function showNavPeek(item) {
+  const fn = NAV_PEEK[item.id], box = document.getElementById('nav-peek');
+  if (!fn || !box || item.classList.contains('dd-open')) return;
+  const loading = item.id.startsWith('an-') ? !adminData : !memberData;
+  let p; try { p = fn(); } catch (e) { return; }
+  box.innerHTML = `<div class="pk-head"><span class="pk-ic">${p.icon}</span><span>${esc(p.title)}</span><span class="pk-go">Open →</span></div>${loading ? '<div class="pk-note">Loading…</div>' : p.body}`;
+  const r = item.getBoundingClientRect(), sb = item.closest('.sidebar').getBoundingClientRect();
+  box.style.left = (sb.right + 10) + 'px';
+  box.classList.add('show');
+  const h = box.offsetHeight;
+  box.style.top = Math.max(10, Math.min(r.top + r.height / 2 - 26, window.innerHeight - h - 10)) + 'px';
+  box.style.setProperty('--arrow-top', (r.top + r.height / 2 - parseFloat(box.style.top)) + 'px');
+}
+function hideNavPeek() { document.getElementById('nav-peek')?.classList.remove('show'); }
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.matchMedia && !window.matchMedia('(hover: hover)').matches) return;   // phones/tablets: no hover
+  document.querySelectorAll('.sidebar .nav-item[id]').forEach(item => {
+    item.addEventListener('mouseenter', () => { clearTimeout(peekTimer); peekTimer = setTimeout(() => showNavPeek(item), 120); });
+    item.addEventListener('mouseleave', () => { clearTimeout(peekTimer); peekTimer = setTimeout(hideNavPeek, 80); });
+    item.addEventListener('click', () => { clearTimeout(peekTimer); hideNavPeek(); });
+  });
+});
+window.addEventListener('scroll', hideNavPeek, true);
+
+// ════════════════════════════════════════════════
+// ANALYTICS REPORT  — everything is computed here from admin_dashboard()
+// Filters: General (all time) · By year · By date & time · Specific session
+//          + optional Area and Province
+// ════════════════════════════════════════════════
+let trendView = 'chart';
+function barRows(rows, emptyText) {
+  // single-series magnitude → one hue; values in ink; hover tooltip on every bar
+  if (!rows.length) return emptyState('📊', emptyText);
+  return rows.map(r => `<div class="cbr" data-tip="${esc(r.tip)}"><div class="cbl">${esc(r.label)}</div><div class="cbt"><div class="cbf rep-bar" style="width:${r.value == null ? 0 : r.value}%;"></div></div><div class="cbv rep-val">${r.value == null ? '—' : r.value + '%'}</div></div>`).join('');
+}
+function rateOf(regs) {
+  const att = regs.filter(r => r.attendance_status === 'ATTENDED').length;
+  const done = regs.filter(r => ['ATTENDED', 'INCOMPLETE', 'ABSENT'].includes(r.attendance_status)).length;
+  return { att, done, rate: done ? Math.round(100 * att / done) : null };
+}
+function manilaTs(local) { return local ? new Date(local + ':00+08:00') : null; }   // datetime-local value → Manila time
+function toLocalInput(d) { const p = manilaParts(d.toISOString()); return `${p.date}T${p.time}`; }
+function yearOf(iso) { return Number(manilaParts(iso).date.slice(0, 4)); }
+function monthKey(iso) { return manilaParts(iso).date.slice(0, 7); }
+
+function fillReportSelects() {
+  const d = ad(), all = (d.sessions || []).filter(s => s.status !== 'Draft');
+  const keep = id => document.getElementById(id)?.value;
+  const yearSel = document.getElementById('rep-year');
+  if (yearSel) {
+    const k = keep('rep-year'), cur = yearOf(new Date().toISOString());
+    const years = [...new Set([cur, ...all.map(s => yearOf(s.start))])].sort((a, b) => b - a);
+    yearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    if (k && years.includes(Number(k))) yearSel.value = k;
+  }
+  const sesSel = document.getElementById('rep-session');
+  if (sesSel) {
+    const k = keep('rep-session');
+    const list = [...all].sort((a, b) => new Date(b.start) - new Date(a.start));
+    sesSel.innerHTML = list.length ? list.map(s => `<option value="${esc(s.session_id)}">${esc(s.title)} · ${fmtDate(s.start)} ${fmtTime(s.start)}${s.status === 'Cancelled' ? ' (cancelled)' : ''}</option>`).join('') : '<option value="">No sessions yet</option>';
+    if (k && list.some(s => s.session_id === k)) sesSel.value = k;
+  }
+  const fillOpt = (id, values, first, label = v => v) => {
+    const el = document.getElementById(id); if (!el) return;
+    const k = el.value;
+    el.innerHTML = `<option value="">${first}</option>` + values.map(v => `<option value="${esc(v)}">${esc(label(v))}</option>`).join('');
+    if (values.includes(k)) el.value = k;
+  };
+  fillOpt('rep-area', d.areas || [], 'All areas');
+  fillOpt('rep-province', d.provinces || [], 'All provinces');
+  const from = document.getElementById('rep-from'), to = document.getElementById('rep-to');
+  if (from && !from.value) { const n = new Date(); const p = manilaParts(n.toISOString()); from.value = `${p.date.slice(0, 8)}01T00:00`; to.value = toLocalInput(n); }
+}
+function onReportTypeChange() {
+  const t = document.getElementById('rep-type').value;
+  document.querySelectorAll('#a-analytics-section [data-for]').forEach(el => {
+    el.style.display = el.dataset.for.split(' ').includes(t) ? '' : 'none';
+  });
+  renderAnalytics();
+}
+function resetReportFilters() {
+  document.getElementById('rep-type').value = 'general';
+  ['rep-area', 'rep-province'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('rep-from').value = '';
+  fillReportSelects();
+  onReportTypeChange();
+}
+function setReportRange(preset) {
+  const now = new Date(), p = manilaParts(now.toISOString()), today = new Date(`${p.date}T00:00:00+08:00`);
+  const day = 864e5; let from, to = now;
+  const [y, m] = [Number(p.date.slice(0, 4)), Number(p.date.slice(5, 7))];
+  const firstOf = (yy, mm) => new Date(`${yy}-${String(mm).padStart(2, '0')}-01T00:00:00+08:00`);
+  if (preset === 'today') from = today;
+  else if (preset === '7d') from = new Date(today - 6 * day);
+  else if (preset === '30d') from = new Date(today - 29 * day);
+  else if (preset === 'month') from = firstOf(y, m);
+  else if (preset === 'lastmonth') { from = firstOf(m === 1 ? y - 1 : y, m === 1 ? 12 : m - 1); to = new Date(firstOf(y, m) - 60000); }
+  else if (preset === 'quarter') from = firstOf(y, Math.floor((m - 1) / 3) * 3 + 1);
+  document.getElementById('rep-from').value = toLocalInput(from);
+  document.getElementById('rep-to').value = toLocalInput(to);
+  renderAnalytics();
+}
+
+// Builds the data for the current filters
+function reportScope() {
+  const d = ad(), g = id => document.getElementById(id)?.value || '';
+  const type = g('rep-type') || 'general', area = g('rep-area'), prov = g('rep-province');
+  let sessions = (d.sessions || []).filter(s => s.status !== 'Draft');
+  let label = 'General report · All time', from = null, to = null, error = '', errorFields = [];
+  if (type === 'session') {
+    sessions = sessions.filter(s => s.session_id === g('rep-session'));
+    label = sessions[0] ? `Session report · ${sessions[0].title} · ${fmtDate(sessions[0].start)} ${fmtTime(sessions[0].start)}` : 'Session report · choose a session';
+  } else {
+    sessions = sessions.filter(s => s.status !== 'Cancelled');
+    if (type === 'year') {
+      const y = Number(g('rep-year'));
+      sessions = sessions.filter(s => yearOf(s.start) === y);
+      from = new Date(`${y}-01-01T00:00:00+08:00`); to = new Date(`${y + 1}-01-01T00:00:00+08:00`);
+      label = `Yearly report · ${y}`;
+    } else if (type === 'range') {
+      from = manilaTs(g('rep-from')); to = manilaTs(g('rep-to'));
+      if (!from || !to || isNaN(from) || isNaN(to)) { error = 'Choose both a From and a To date and time to generate this report.'; errorFields = [!from || isNaN(from) ? 'rep-from' : null, !to || isNaN(to) ? 'rep-to' : null]; from = to = null; }
+      else if (from > to) { error = `Invalid date range: From (${fmtDate(from.toISOString())} ${fmtTime(from.toISOString())}) is later than To (${fmtDate(to.toISOString())} ${fmtTime(to.toISOString())}). Correct the dates to generate the report.`; errorFields = ['rep-from', 'rep-to']; }
+      if (error) sessions = [];
+      sessions = sessions.filter(s => (!from || new Date(s.start) >= from) && (!to || new Date(s.start) <= to));
+      label = error ? 'Date & time report · invalid date range' : `Date & time report · ${fmtDate(from.toISOString())} ${fmtTime(from.toISOString())} – ${fmtDate(to.toISOString())} ${fmtTime(to.toISOString())}`;
+    }
+    if (area) { sessions = sessions.filter(s => s.area === area); label += ` · ${area}`; }
+  }
+  if (prov) label += ` · ${prov}`;
+  const ids = new Set(sessions.map(s => s.session_id));
+  const people = [...(d.members || []), ...(adminMembers || [])];
+  const provOf = new Map(people.map(m => [m.user_id, m.province]));
+  const provByEmail = new Map(people.filter(m => m.email).map(m => [String(m.email).toLowerCase(), m.province]));
+  let regs = (d.registrations || []).filter(r => ids.has(r.session_id));
+  let pays = (d.payments || []).filter(p => ids.has(p.session_id));
+  if (prov) {
+    regs = regs.filter(r => provOf.get(r.user_id) === prov);
+    pays = pays.filter(p => provByEmail.get(String(p.email || '').toLowerCase()) === prov);
+  }
+  return { type, area, prov, label, sessions, regs, pays, from, to, provOf, people, error, errorFields, empty: !sessions.length };
+}
+
+function renderAnalytics() {
+  if (!document.getElementById('rep-type')) return;
+  const t = document.getElementById('rep-type').value;
+  document.querySelectorAll('#a-analytics-section [data-for]').forEach(el => { el.style.display = el.dataset.for.split(' ').includes(t) ? '' : 'none'; });
+  const S = reportScope(), now = Date.now();
+  setText('rep-scope', S.label);
+  // UC-04: invalid criteria or no matching data → say so and block report generation
+  ['rep-from', 'rep-to'].forEach(id => document.getElementById(id)?.classList.toggle('is-invalid', S.errorFields.includes(id)));
+  const msg = document.getElementById('rep-msg');
+  if (msg) {
+    msg.style.display = S.error || S.empty ? 'flex' : 'none';
+    msg.className = 'rep-msg ' + (S.error ? 'is-error' : 'is-empty');
+    msg.innerHTML = S.error ? `<span>⚠</span><div><strong>${esc(S.error)}</strong></div>`
+      : `<span>ℹ</span><div><strong>No data matches the selected report filters.</strong> Change the filters to generate a report.</div>`;
+  }
+  ['rep-export-btn', 'rep-print-btn'].forEach(id => {
+    const b = document.getElementById(id); if (!b) return;
+    b.disabled = !!(S.error || S.empty);
+    b.title = S.error ? 'Fix the report dates first' : S.empty ? 'No data matches the selected report filters' : '';
+  });
+  const held = S.sessions.filter(s => new Date(s.start) <= now);
+  const r = rateOf(S.regs);
+  const registered = S.prov ? S.regs.length : S.sessions.reduce((a, s) => a + Number(s.registered || 0), 0);
+  const capacity = S.sessions.reduce((a, s) => a + Number(s.capacity || 0), 0);
+  const certs = S.regs.filter(x => x.certificate_id && x.cert_status !== 'FAILED');
+  const paid = S.pays.filter(p => p.status === 'PAID').reduce((a, p) => a + Number(p.amount || 0), 0);
+  const pend = S.pays.filter(p => p.status === 'PENDING_PAYMENT').reduce((a, p) => a + Number(p.amount || 0), 0);
+  const below = S.regs.filter(x => x.attendance_status === 'INCOMPLETE' || x.attendance_status === 'ABSENT').length;
+  let sixth;
+  if (S.type === 'session') sixth = ['Below 80% / absent', fmtInt(below), `${fmtInt(S.regs.filter(x => x.attendance_status === 'REGISTERED').length)} awaiting sync`];
+  else if (S.from || S.to) {
+    const nm = S.people.filter(m => m.role !== 'admin' && m.role !== 'super_admin' && m.registered_at && (!S.from || new Date(m.registered_at) >= S.from) && (!S.to || new Date(m.registered_at) <= S.to) && (!S.prov || m.province === S.prov));
+    sixth = ['New members', fmtInt(new Map(nm.map(m => [m.user_id, 1])).size), 'joined in this period'];
+  } else sixth = ['Members', fmtInt(S.prov ? (ad().members || []).filter(m => m.province === S.prov).length : ad().overview?.total_members), S.prov ? `in ${S.prov}` : 'registered accounts'];
+  const kpi = (l, v, sub) => `<div class="rep-kpi"><div class="k-l">${l}</div><div class="k-v">${v}</div><div class="k-s">${sub}</div></div>`;
+  setHtml('rep-kpis', [
+    kpi('Sessions', fmtInt(S.sessions.length), `${fmtInt(held.length)} held · ${fmtInt(S.sessions.length - held.length)} upcoming`),
+    kpi('Registrations', fmtInt(registered), capacity && !S.prov ? `${Math.round(100 * registered / capacity)}% of ${fmtInt(capacity)} seats` : 'across these sessions'),
+    kpi('Attendance rate', r.rate == null ? '—' : r.rate + '%', r.done ? `${fmtInt(r.att)} of ${fmtInt(r.done)} attended ≥80%` : 'no synced attendance yet'),
+    kpi('Certificates', fmtInt(certs.length), `${fmtInt(certs.filter(x => x.cert_status === 'ISSUED').length)} issued · ${fmtInt(certs.filter(x => x.cert_status === 'PENDING').length)} pending`),
+    kpi('Revenue collected', fmtMoney(paid), pend ? `${fmtMoney(pend)} still pending` : 'no pending payments'),
+    kpi(...sixth)
+  ].join(''));
+
+  // province & area
+  const byProv = new Map();
+  S.regs.forEach(x => { const p = S.provOf.get(x.user_id); if (!p) return; (byProv.get(p) || byProv.set(p, []).get(p)).push(x); });
+  const provRows = [...byProv.entries()].map(([p, rs]) => { const q = rateOf(rs); return { label: p, value: q.rate, tip: `${p}: ${q.att} of ${q.done} attended ≥80%${q.rate == null ? ' (not synced yet)' : ` · ${q.rate}%`} · ${rs.length} registrations` }; })
+    .sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
+  setHtml('a-an-province', barRows(provRows, 'No registrations in this report yet.'));
+  const sessById = new Map(S.sessions.map(s => [s.session_id, s]));
+  const byArea = new Map();
+  S.regs.forEach(x => { const a = sessById.get(x.session_id)?.area; if (!a) return; (byArea.get(a) || byArea.set(a, []).get(a)).push(x); });
+  const areaRows = [...byArea.entries()].map(([a, rs]) => { const q = rateOf(rs); const n = S.sessions.filter(s => s.area === a).length; return { label: areaStyle(a).short, value: q.rate, tip: `${a}: ${n} session(s) · ${q.att} of ${q.done} attended ≥80%` }; })
+    .sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
+  setHtml('a-an-area', barRows(areaRows, 'No registrations in this report yet.'));
+
+  // certificate status donut (status colours, always labelled)
+  const segs = [
+    ['Issued', S.regs.filter(x => x.certificate_id && x.cert_status === 'ISSUED').length, '#2E7D32'],
+    ['Pending', S.regs.filter(x => x.certificate_id && x.cert_status === 'PENDING').length, '#1976D2'],
+    ['Below 80% / absent', below, '#E0A100'],
+    ['Failed', S.regs.filter(x => x.cert_status === 'FAILED').length, '#E53935']
+  ].filter((x, i) => i < 3 || x[1] > 0);
+  const total = segs.reduce((a, x) => a + x[1], 0);
+  if (!total) setHtml('a-an-certs', emptyState('📜', 'No certificate activity in this report.'));
+  else {
+    const C = 2 * Math.PI * 34; let off = 0;
+    const gap = segs.filter(x => x[1] > 0).length > 1 ? 2 : 0;
+    const arcs = segs.filter(x => x[1] > 0).map(x => { const len = C * x[1] / total; const a = `<circle cx="48" cy="48" r="34" fill="none" stroke="${x[2]}" stroke-width="11" stroke-dasharray="${Math.max(len - gap, 0.5).toFixed(1)} ${(C - len + gap).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}" transform="rotate(-90 48 48)" data-tip="${esc(`${x[0]}: ${fmtInt(x[1])} (${Math.round(100 * x[1] / total)}%)`)}" style="cursor:default;"/>`; off += len; return a; }).join('');
+    setHtml('a-an-certs', `<div style="display:flex;align-items:center;gap:14px;"><svg width="96" height="96" viewBox="0 0 96 96" style="flex-shrink:0;"><circle cx="48" cy="48" r="34" fill="none" stroke="#F1F5F9" stroke-width="11"/>${arcs}<text x="48" y="46" text-anchor="middle" font-size="15" font-weight="800" fill="#0F172A">${fmtInt(total)}</text><text x="48" y="59" text-anchor="middle" font-size="8" fill="#94A3B8">registrations</text></svg>
+      <div style="display:flex;flex-direction:column;gap:7px;">${segs.map(x => `<div style="display:flex;align-items:center;gap:7px;font-size:12px;"><div style="width:9px;height:9px;border-radius:50%;background:${x[2]};flex-shrink:0;"></div><div><div style="font-weight:600;color:var(--t1);">${x[0]}</div><div style="font-size:11px;color:var(--t3);">${fmtInt(x[1])} · ${Math.round(100 * x[1] / total)}%</div></div></div>`).join('')}</div></div>`);
+  }
+
+  // single session: detail + participants instead of trend / list
+  renderReportSessionDetail(S);
+  document.getElementById('rep-trend-card').style.display = S.type === 'session' ? 'none' : '';
+  renderReportTrend(S);
+  renderReportSessions(S);
+  renderReportInsights(S, r, provRows, areaRows, paid, pend);
+}
+
+function renderReportSessionDetail(S) {
+  const s = S.type === 'session' ? S.sessions[0] : null;
+  if (!s) { setHtml('rep-session-detail', ''); return; }
+  const r = rateOf(S.regs);
+  const row = (k, v) => `<div><div class="mf-lbl">${k}</div><div style="font-size:13px;font-weight:600;">${v}</div></div>`;
+  const parts = [...S.regs].sort((a, b) => (b.attendance_pct ?? -1) - (a.attendance_pct ?? -1));
+  setHtml('rep-session-detail', `<div class="card cp" style="margin-bottom:16px;">
+    <div class="ch" style="margin-bottom:12px;"><div><div class="ct">🗓 ${esc(s.title)}</div><div class="rep-sub" style="margin:3px 0 0;">${sessionStatusBadge(s)} ${areaBadge(s.area)}</div></div><button class="btn btn-ghost btn-sm" onclick="openSessionEditor('${esc(s.session_id)}')">✏️ Edit session</button></div>
+    <div class="rep-detail-grid">
+      ${row('📅 Date', fmtDateLong(s.start))}${row('🕒 Time', `${fmtTime(s.start)} – ${fmtTime(s.end)} · ${esc(s.duration)} min`)}${row('👤 Speaker', esc(s.speaker || '—'))}${row('🏅 Accreditation', esc(s.accreditation || '—'))}
+      ${row('🎟 Fill rate', Number(s.capacity) ? `${fmtInt(s.registered)} of ${fmtInt(s.capacity)} seats (${Math.round(100 * Number(s.registered) / Number(s.capacity))}%)` : fmtInt(s.registered))}
+      ${row('✅ Attended ≥80%', r.done ? `${fmtInt(r.att)} of ${fmtInt(r.done)} (${r.rate}%)` : 'Not synced yet')}
+      ${row('💳 Fee · Revenue', `${Number(s.fee) > 0 ? fmtMoney(s.fee) : 'Free'} · ${fmtMoney(S.pays.filter(p => p.status === 'PAID').reduce((a, p) => a + Number(p.amount || 0), 0))}`)}
+      ${row('📜 Certificates', `${fmtInt(S.regs.filter(x => x.certificate_id).length)} generated`)}
+    </div>
+    <div class="ct" style="margin:18px 0 8px;">👥 Participants${S.prov ? ` · ${esc(S.prov)}` : ''}</div>
+    <div style="overflow-x:auto;"><table class="dt"><thead><tr><th>Member</th><th>Province</th><th>Payment</th><th>Attendance</th><th>Status</th><th>Certificate</th></tr></thead><tbody>
+    ${parts.length ? parts.map(x => `<tr><td class="nc">${esc(x.member || x.email || '—')}</td><td>${esc(S.provOf.get(x.user_id) || '—')}</td><td>${esc((REG_PAY_LABEL[x.payment_status] || ['', x.payment_status || '—'])[1])}</td><td>${x.attendance_pct == null ? '—' : Math.round(x.attendance_pct) + '%'}</td><td>${{ ATTENDED: '<span class="badge bg-g">Attended</span>', INCOMPLETE: '<span class="badge bg-y">Below 80%</span>', ABSENT: '<span class="badge bg-r">Absent</span>' }[x.attendance_status] || '<span class="badge bg-gr">Awaiting sync</span>'}</td><td>${x.certificate_id ? (x.cert_status === 'ISSUED' ? '✓ Issued' : x.cert_status === 'FAILED' ? '✗ Failed' : '⏳ Pending') : '—'}</td></tr>`).join('')
+      : emptyRow(6, new Date(s.start) > Date.now() ? 'Participants appear here once the session starts.' : 'No registrations for this session.')}
+    </tbody></table></div></div>`);
+}
+
+function renderReportTrend(S) {
+  if (S.type === 'session') return;
+  // months to show
+  let months = [];
+  const add = (y, m) => months.push(`${y}-${String(m).padStart(2, '0')}`);
+  const nowKey = monthKey(new Date().toISOString());
+  if (S.type === 'year') {
+    const y = Number(document.getElementById('rep-year').value);
+    for (let m = 1; m <= 12; m++) { const k = `${y}-${String(m).padStart(2, '0')}`; if (k <= nowKey || S.sessions.some(s => monthKey(s.start) === k)) add(y, m); }
+  } else {
+    const keys = S.sessions.map(s => monthKey(s.start));
+    if (S.type === 'range' && S.from && S.to) keys.push(monthKey(S.from.toISOString()), monthKey(S.to.toISOString()));
+    if (keys.length) {
+      keys.sort(); let [y, m] = keys[0].split('-').map(Number); const last = keys[keys.length - 1];
+      while (`${y}-${String(m).padStart(2, '0')}` <= last) { add(y, m); m++; if (m > 12) { m = 1; y++; } }
+    }
+    S.trendCut = S.type === 'general' && months.length > 24;
+    if (S.trendCut) months = months.slice(-24);
+  }
+  const rows = months.map(k => {
+    const ss = S.sessions.filter(s => monthKey(s.start) === k), ids = new Set(ss.map(s => s.session_id));
+    const rg = S.regs.filter(x => ids.has(x.session_id)), q = rateOf(rg);
+    return { k, label: new Date(`${k}-15T00:00:00+08:00`).toLocaleDateString('en-PH', { month: 'short', year: '2-digit', timeZone: TZ }),
+      long: new Date(`${k}-15T00:00:00+08:00`).toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: TZ }),
+      sessions: ss.length, registered: S.prov ? rg.length : ss.reduce((a, s) => a + Number(s.registered || 0), 0), attended: q.att, rate: q.rate,
+      certs: rg.filter(x => x.certificate_id && x.cert_status === 'ISSUED').length,
+      revenue: S.pays.filter(p => p.status === 'PAID' && ids.has(p.session_id)).reduce((a, p) => a + Number(p.amount || 0), 0) };
+  });
+  S.trend = rows;
+  setText('rep-trend-note', S.trendCut ? 'Members who attended ≥80%, per month · showing the last 24 months (use “By year” for older data)' : 'Members who attended ≥80%, per month');
+  if (!rows.length || !rows.some(x => x.sessions)) {
+    setHtml('rep-trend-chart', emptyState('📈', 'No sessions in this period.'));
+  } else {
+    const max = Math.max(1, ...rows.map(x => x.attended));
+    const peak = rows.reduce((a, x) => x.attended > a.attended ? x : a, rows[0]);
+    setHtml('rep-trend-chart', `<div class="rep-bars">${rows.map(x => `<div class="rep-bcol" data-tip="${esc(`${x.long}\n${x.sessions} session(s) · ${x.registered} registered\n${x.attended} attended ≥80%${x.rate == null ? '' : ` (${x.rate}%)`}\n${x.certs} certificates · ${fmtMoney(x.revenue)}`)}"><div class="bv">${x === peak && x.attended ? x.attended : ''}</div><div class="bar" style="height:${Math.round(100 * x.attended / max)}%;"></div></div>`).join('')}</div>
+      <div class="rep-blabels">${rows.map(x => `<div>${esc(x.label)}</div>`).join('')}</div>`);
+  }
+  setHtml('a-an-monthly', rows.length ? rows.map(x => `<tr><td>${esc(x.long)}${x.k === nowKey ? ' (MTD)' : ''}</td><td>${fmtInt(x.sessions)}</td><td>${fmtInt(x.registered)}</td><td>${fmtInt(x.attended)}</td><td>${fmtInt(x.certs)}</td><td>${fmtMoney(x.revenue)}</td><td>${x.rate == null ? '—' : `<span class="badge ${x.rate >= 80 ? 'bg-g' : x.rate >= 70 ? 'bg-y' : 'bg-r'}">${x.rate}%</span>`}</td></tr>`).join('') : emptyRow(7, 'No data for this period.'));
+}
+function setTrendView(v) {
+  trendView = v;
+  document.getElementById('rep-trend-chart').style.display = v === 'chart' ? '' : 'none';
+  document.getElementById('rep-trend-table').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('rep-trend-chart-btn').classList.toggle('active', v === 'chart');
+  document.getElementById('rep-trend-table-btn').classList.toggle('active', v === 'table');
+}
+
+function reportSessionRows(S) {
+  return [...S.sessions].sort((a, b) => new Date(b.start) - new Date(a.start)).map(s => {
+    const rg = S.regs.filter(x => x.session_id === s.session_id), q = rateOf(rg);
+    return { s, registered: S.prov ? rg.length : Number(s.registered || 0), attended: q.att, rate: q.rate,
+      certs: rg.filter(x => x.certificate_id && x.cert_status !== 'FAILED').length,
+      revenue: S.pays.filter(p => p.status === 'PAID' && p.session_id === s.session_id).reduce((a, p) => a + Number(p.amount || 0), 0) };
+  });
+}
+function renderReportSessions(S) {
+  const card = document.getElementById('rep-sessions-card');
+  if (S.type === 'session') { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const rows = reportSessionRows(S);
+  setText('rep-sessions-title', `🗓 Sessions in this report (${rows.length})`);
+  setHtml('rep-sessions', rows.length ? rows.map(x => `<tr class="rep-click" onclick="openSessionReport('${esc(x.s.session_id)}')"><td class="nc">${esc(x.s.title)}</td><td>${fmtDate(x.s.start)} · ${fmtTime(x.s.start)}</td><td>${areaBadge(x.s.area)}</td><td>${fmtInt(x.registered)}${Number(x.s.capacity) && !S.prov ? `<span style="color:var(--t3);"> / ${fmtInt(x.s.capacity)}</span>` : ''}</td><td>${fmtInt(x.attended)}</td><td>${x.rate == null ? (new Date(x.s.start) > Date.now() ? '<span class="badge bg-b">Upcoming</span>' : '<span class="badge bg-y">Awaiting sync</span>') : `<span class="badge ${x.rate >= 80 ? 'bg-g' : x.rate >= 70 ? 'bg-y' : 'bg-r'}">${x.rate}%</span>`}</td><td>${fmtInt(x.certs)}</td><td>${fmtMoney(x.revenue)}</td></tr>`).join('')
+    : emptyRow(8, 'No sessions match these filters.'));
+}
+function openSessionReport(sessionId) {
+  document.getElementById('rep-type').value = 'session';
+  fillReportSelects();
+  document.getElementById('rep-session').value = sessionId;
+  onReportTypeChange();
+  document.getElementById('a-analytics-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderReportInsights(S, r, provRows, areaRows, paid, pend) {
+  setText('a-an-insight-title', `Insights · ${S.label.split(' · ').slice(0, 2).join(' · ')}`);
+  const tips = [];
+  const rated = a => a.filter(x => x.value != null);
+  if (!S.sessions.length) { setHtml('a-an-insights', 'No sessions match these filters. Try a wider date range or the general report.'); return; }
+  if (r.rate != null) tips.push(r.rate >= 80 ? `✅ Attendance is healthy at <strong>${r.rate}%</strong> (goal: 80%).` : `⚠ Attendance is <strong>${r.rate}%</strong>, below the 80% goal — ${fmtInt(r.done - r.att)} registrant(s) missed the threshold.`);
+  const pr = rated(provRows); if (pr.length > 1) tips.push(`📍 <strong>${esc(pr[0].label)}</strong> has the best attendance (${pr[0].value}%); <strong>${esc(pr[pr.length - 1].label)}</strong> is lowest (${pr[pr.length - 1].value}%) — consider targeted reminders there.`);
+  const ar = rated(areaRows); if (ar.length > 1) tips.push(`🎯 <strong>${esc(ar[0].label)}</strong> sessions draw the best attendance (${ar[0].value}%).`);
+  const low = S.sessions.filter(s => Number(s.capacity) && Number(s.registered) / Number(s.capacity) < 0.5 && new Date(s.start) > Date.now());
+  if (low.length) tips.push(`📣 ${low.length} upcoming session(s) are under half full (e.g. <strong>${esc(low[0].title)}</strong>) — promote them to members.`);
+  const unsynced = S.sessions.filter(s => new Date(s.end) < Date.now() && Number(s.registered) && !Number(s.log_count));
+  if (unsynced.length) tips.push(`🔄 ${unsynced.length} finished session(s) still need their Zoom attendance synced — certificates can't be generated until then.`);
+  const ready = S.regs.filter(x => x.attendance_status === 'ATTENDED' && !x.certificate_id).length;
+  if (ready) tips.push(`📜 ${ready} qualified member(s) are still waiting for their certificate.`);
+  if (pend) tips.push(`💳 ${fmtMoney(pend)} in payments is still pending.`);
+  if (S.trend && S.trend.filter(x => x.sessions).length > 1) { const best = S.trend.reduce((a, x) => x.attended > a.attended ? x : a, S.trend[0]); if (best.attended) tips.push(`📈 Busiest month: <strong>${esc(best.long)}</strong> with ${fmtInt(best.attended)} members attending.`); }
+  setHtml('a-an-insights', tips.length ? tips.join('<br>') : 'Not enough data yet. Insights appear once sessions have registrations and synced attendance.');
+}
+
+// ── Export / print the current report
+// Always works from fresh data (another tab or admin may have changed something),
+// and never generates a report from invalid criteria or with nothing in it.
+async function freshReportScope() {
+  let S = reportScope();
+  if (S.error) { showToast(S.error, 'error', 6000); return null; }
+  await loadAdminData();
+  S = reportScope(); renderAnalytics();
+  if (S.error) { showToast(S.error, 'error', 6000); return null; }
+  if (S.empty) { showToast('No data matches the selected report filters — there is nothing to export.', 'error', 5000); return null; }
+  return S;
+}
+async function exportAnalyticsReport() {
+  const S = await freshReportScope(); if (!S) return;
+  const r = rateOf(S.regs);
+  const rows = [['GameChanger — Analytics Report'], [S.label], [`Generated ${fmtDate(new Date().toISOString())} ${fmtTime(new Date().toISOString())}`], [],
+    ['Summary'], ['Sessions', S.sessions.length], ['Registrations', S.prov ? S.regs.length : S.sessions.reduce((a, s) => a + Number(s.registered || 0), 0)],
+    ['Attendance rate', r.rate == null ? '' : r.rate + '%'], ['Attended ≥80%', r.att],
+    ['Certificates', S.regs.filter(x => x.certificate_id && x.cert_status !== 'FAILED').length],
+    ['Revenue collected', S.pays.filter(p => p.status === 'PAID').reduce((a, p) => a + Number(p.amount || 0), 0)], [],
+    ['Session', 'Date', 'Time', 'Area', 'Registered', 'Attended', 'Attendance %', 'Certificates', 'Revenue'],
+    ...reportSessionRows(S).map(x => [x.s.title, fmtDate(x.s.start), fmtTime(x.s.start), x.s.area, x.registered, x.attended, x.rate ?? '', x.certs, x.revenue])];
+  if (S.type === 'session') rows.push([], ['Participant', 'Province', 'Payment', 'Attendance %', 'Status', 'Certificate'],
+    ...S.regs.map(x => [x.member || x.email, S.provOf.get(x.user_id) || '', x.payment_status, x.attendance_pct ?? '', x.attendance_status, x.cert_status || '']));
+  const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const csv = '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: `analytics-report-${new Date().toISOString().slice(0, 10)}.csv` });
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  logAdminAction('Exported analytics report', S.label);
+  showToast('Report exported.', 'success');
+}
+async function printAnalyticsReport() {
+  const S = await freshReportScope(); if (!S) return;
+  const r = rateOf(S.regs);
+  const w = window.open('', '_blank');
+  if (!w) { showToast('Allow pop-ups for this site to print the report.', 'error', 5000); return; }
+  const kpis = document.getElementById('rep-kpis').innerText.split('\n').filter(Boolean);
+  const kRows = []; for (let i = 0; i + 2 < kpis.length + 1; i += 3) kRows.push(kpis.slice(i, i + 3));
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Analytics Report</title><style>
+    body{font-family:Arial,sans-serif;color:#0F172A;margin:28px;} h1{font-size:20px;margin:0;} .sub{color:#475569;font-size:12px;margin:4px 0 18px;}
+    .k{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px;} .k div{border:1px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:11px;color:#475569;} .k b{display:block;font-size:17px;color:#0F172A;margin:2px 0;}
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px;} th,td{border-bottom:1px solid #E2E8F0;padding:6px;text-align:left;} th{background:#F4F6FB;}
+    h2{font-size:13px;margin:16px 0 6px;} .ins{font-size:12px;line-height:1.7;color:#334155;}</style></head><body>
+    <h1>GameChanger — Analytics Report</h1><div class="sub">${esc(S.label)}<br>Generated ${fmtDate(new Date().toISOString())} ${fmtTime(new Date().toISOString())}</div>
+    <div class="k">${kRows.map(x => `<div>${esc(x[0] || '')}<b>${esc(x[1] || '')}</b>${esc(x[2] || '')}</div>`).join('')}</div>
+    <h2>Insights</h2><div class="ins">${document.getElementById('a-an-insights').innerHTML}</div>
+    <h2>Sessions</h2><table><tr><th>Session</th><th>Date &amp; time</th><th>Area</th><th>Registered</th><th>Attended</th><th>Attendance</th><th>Certs</th><th>Revenue</th></tr>
+    ${reportSessionRows(S).map(x => `<tr><td>${esc(x.s.title)}</td><td>${fmtDate(x.s.start)} ${fmtTime(x.s.start)}</td><td>${esc(x.s.area)}</td><td>${x.registered}</td><td>${x.attended}</td><td>${x.rate == null ? '—' : x.rate + '%'}</td><td>${x.certs}</td><td>${fmtMoney(x.revenue)}</td></tr>`).join('') || '<tr><td colspan="8">No sessions.</td></tr>'}</table>
+    ${S.type === 'session' ? `<h2>Participants</h2><table><tr><th>Member</th><th>Province</th><th>Attendance</th><th>Status</th><th>Certificate</th></tr>${S.regs.map(x => `<tr><td>${esc(x.member || x.email || '')}</td><td>${esc(S.provOf.get(x.user_id) || '—')}</td><td>${x.attendance_pct == null ? '—' : Math.round(x.attendance_pct) + '%'}</td><td>${esc(x.attendance_status)}</td><td>${esc(x.cert_status || '—')}</td></tr>`).join('') || '<tr><td colspan="5">No participants.</td></tr>'}</table>` : ''}
+    <script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  w.document.close();
+  logAdminAction('Printed analytics report', S.label);
+}
+
+// ── Attendance goes into Supabase automatically ──
+// When an admin has the site open, every finished session that has a Zoom meeting but no
+// attendance yet is fetched from Zoom and saved (attendance_logs), then matched to the
+// registrations. Zoom needs a few minutes after a meeting ends, so it retries every 10 minutes.
+const autoSyncTried = {};
+let autoSyncBusy = false;
+async function autoSyncAttendance() {
+  if (autoSyncBusy || currentRole !== 'admin' || !adminData) return;
+  const now = Date.now();
+  const due = (ad().sessions || []).filter(s => s.zoom_join_url && s.status !== 'Draft' && s.status !== 'Cancelled'
+    && Number(s.registered) > 0 && !Number(s.log_count)
+    && new Date(s.end).getTime() + 5 * 60000 < now && now - new Date(s.end).getTime() < 30 * 864e5
+    && (!autoSyncTried[s.session_id] || now - autoSyncTried[s.session_id] > 10 * 60000)).slice(0, 3);
+  if (!due.length) return;
+  autoSyncBusy = true;
+  let done = 0;
+  try {
+    for (const s of due) {
+      autoSyncTried[s.session_id] = now;
+      const z = await zoomCall('sync_attendance', s.session_id);
+      if (!z.ok) { if (z.code && z.code !== 'zoom_error') break; continue; }      // Zoom not set up → stop trying this round
+      if (z.data.status !== 'imported') continue;
+      try {
+        const r = await rpc('admin_sync_attendance', { p_session: s.session_id });
+        if (!r.no_logs) { done++; logAdminAction('Synced Zoom attendance (automatic)', s.title, r); showToast(`📋 Attendance for "${s.title}" was fetched from Zoom and saved.`, 'success', 5000); }
+      } catch (_) { /* shown when the admin syncs by hand */ }
+    }
+  } finally { autoSyncBusy = false; }
+  if (done) await loadAdminData();
+}
+
+// ── Keep an open tab up to date: reload when the tab is looked at again ──
+// (e.g. a session cancelled or a fee changed in another tab / by another admin)
+async function refreshIfStale() {
+  if (document.hidden || !loggedInUser || Date.now() - lastDataLoad < 10000) return;
+  if (document.querySelector('.mo.open')) return;                     // don't disturb an open form
+  if (currentRole === 'admin') await loadAdminData(); else await loadMemberData();
+}
+document.addEventListener('visibilitychange', refreshIfStale);
+window.addEventListener('focus', refreshIfStale);
+setInterval(refreshIfStale, 60000);
+setInterval(autoSyncAttendance, 120000);
+
+// ── Chart tooltips: any element with data-tip shows it on hover
+document.addEventListener('mouseover', e => {
+  const t = e.target.closest?.('[data-tip]'), tip = document.getElementById('chart-tip');
+  if (!tip) return;
+  if (!t) { tip.classList.remove('show'); return; }
+  tip.innerHTML = esc(t.getAttribute('data-tip')).replace(/\n/g, '<br>');
+  tip.classList.add('show');
+});
+document.addEventListener('mousemove', e => {
+  const tip = document.getElementById('chart-tip');
+  if (!tip || !tip.classList.contains('show')) return;
+  const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, window.innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+
+// ════════════════════════════════════════════════
+// EDIT MEMBER — admins & super admins may change ONLY:
+//   area of expertise · mastery level · account status
+// (admin_update_member_fields() in 10_member_edit.sql)
+// ════════════════════════════════════════════════
+let editMemberId = null;
+function openEditMember(userId) {
+  const m = membersSource().find(x => x.user_id === userId); if (!m) return;
+  if (m.archived) { showToast('Restore this account before editing it.', 'info'); return; }
+  editMemberId = userId;
+  setText('aem-title', `✏️ Edit ${m.full_name || m.email}`);
+  setText('aem-sub', `${m.member_id || ''}${m.role && m.role !== 'member' ? ' · ' + (m.role === 'super_admin' ? 'Super Admin' : 'Admin') : ''}`);
+  const info = [['Email', m.email], ['Phone', m.phone], ['Province', m.province], ['Company', m.company], ['Department', m.department], ['Position', m.position]];
+  setHtml('aem-info', info.map(([k, v]) => `<div><div class="k">${k}</div><div class="v" title="${esc(v || '')}">${esc(v || '—')}</div></div>`).join(''));
+  const sel = document.getElementById('aem-expertise');
+  sel.innerHTML = '<option value="">— Not set —</option>' + (ad().areas || []).map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+  sel.value = m.expertise && (ad().areas || []).includes(m.expertise) ? m.expertise : '';
+  document.getElementById('aem-level').value = m.level || 'Entry';
+  document.getElementById('aem-status').value = ['Active', 'Inactive', 'Suspended'].includes(m.status) ? m.status : 'Active';
+  // Account type: super admins only
+  document.getElementById('aem-role-wrap').style.display = isSuperAdmin() ? '' : 'none';
+  document.getElementById('aem-role').value = m.role || 'member';
+  onEditRoleChange();
+  document.getElementById('aem-err').style.display = 'none';
+  openMo('a-edit-member');
+}
+const ROLE_NAME = { member: 'Member', admin: 'Admin', super_admin: 'Super Admin' };
+function onEditRoleChange() {
+  const m = membersSource().find(x => x.user_id === editMemberId) || {};
+  const from = m.role || 'member', to = document.getElementById('aem-role')?.value || from;
+  let hint = { member: 'Uses the member portal.', admin: 'Manages sessions, attendance, certificates and payments; can view, edit and archive members.', super_admin: 'Full access, including changing account types and restoring archived accounts.' }[to];
+  if (to !== from) {
+    if (from === 'member') hint += ' They will get a new Admin ID (ADM-YYYY-NNNN) and sign in with it from now on.';
+    else if (to === 'member') hint += ' They will get a new member ID (HRC-YYYY-NNNN) and sign in with their email.';
+    else hint += ' Their Admin ID stays the same.';
+  }
+  setText('aem-role-hint', hint);
+}
+async function saveEditMember() {
+  const m = membersSource().find(x => x.user_id === editMemberId); if (!m) return;
+  const exp = document.getElementById('aem-expertise').value, lvl = document.getElementById('aem-level').value, st = document.getElementById('aem-status').value;
+  const role = isSuperAdmin() ? document.getElementById('aem-role').value : (m.role || 'member');
+  const roleChanged = role !== (m.role || 'member');
+  if (roleChanged && !confirm(`Change ${m.full_name || m.email} from ${ROLE_NAME[m.role || 'member']} to ${ROLE_NAME[role]}?`)) return;
+  const btn = document.getElementById('aem-save'); btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    let newId = null;
+    if (roleChanged) newId = await rpc('admin_set_account_type', { p_user: editMemberId, p_role: role });
+    await rpc('admin_update_member_fields', { p_user: editMemberId, p_expertise: exp || null, p_level: lvl, p_status: st });
+    closeMo('a-edit-member');
+    if (roleChanged) showToast(`${m.full_name || m.email} is now ${role === 'admin' ? 'an' : 'a'} ${ROLE_NAME[role]}${newId ? ` — ID ${newId}` : ''}.${role !== 'member' && (m.role || 'member') === 'member' ? ' They sign in with that Admin ID.' : ''}`, 'success', 7000);
+    else showToast(`${m.full_name || m.email} was updated.`, 'success');
+    await loadAdminData();
+  } catch (e) {
+    const err = document.getElementById('aem-err'); err.textContent = friendlyAuthError(e); err.style.display = 'block';
+  } finally { btn.disabled = false; btn.textContent = 'Save Changes'; }
+}
+
+// ════════════════════════════════════════════════
+// EXPORT — builds a CSV file from the data on screen
+// ════════════════════════════════════════════════
+function downloadCSV(filename, headers, rows) {
+  const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(cell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function handleExport(what) {
+  const today = new Date().toISOString().slice(0, 10);
+  let file, headers, rows;
+  if (what === 'my payments') {
+    file = `my-payments-${today}.csv`;
+    headers = ['Session', 'Amount', 'Method', 'Date', 'Reference', 'Status'];
+    rows = (mp().transactions || []).map(t => [t.session, t.amount, CHANNEL_LABEL[t.channel] || t.channel, fmtDate(t.date), t.reference || '', t.status]);
+  } else if (what === 'attendance history' || what === 'all attendance records') {
+    file = `my-attendance-${today}.csv`;
+    headers = ['Session', 'Date', 'Area', 'Duration (min)', 'Attendance %', 'Status', 'Certificate'];
+    rows = (md().history || []).map(h => [h.title, fmtDate(h.start), h.area, h.duration, h.attendance_pct ?? '', h.attendance_status, h.certificate_id ? 'Yes' : 'No']);
+  } else if (what === 'member CSV') {
+    file = `members-${today}.csv`;
+    headers = ['Member ID', 'Name', 'Email', 'Province', 'Expertise', 'Company', 'Position', 'Level', 'Status', 'Attendance %', 'Certificates', 'Registered'];
+    rows = filteredMembers().map(m => [m.member_id, m.full_name, m.email, m.province, m.expertise, m.company, m.position, m.level, m.status, m.attendance?.rate ?? '', m.certificates, fmtDate(m.registered_at)]);
+  } else if (what === 'payments Excel') {
+    file = `payments-${today}.csv`;
+    headers = ['Member', 'Email', 'Session', 'Amount', 'Method', 'Date', 'Status', 'Reference'];
+    rows = filteredPayments().map(p => [p.member, p.email, p.session, p.amount, CHANNEL_LABEL[p.channel] || p.channel, fmtDate(p.date), p.status, p.hitpay_ref || p.order_ref || '']);
+  } else if (what === 'monthly report') {
+    file = `monthly-report-${today}.csv`;
+    headers = ['Month', 'Sessions', 'Attendees', 'Certificates', 'Revenue', 'Avg Attendance %'];
+    rows = (ad().monthly || []).map(m => [fmtMonth(m.month), m.sessions, m.attendees, m.certs, m.revenue, m.rate ?? '']);
+  } else {
+    showToast('Nothing to export.', 'info'); return;
+  }
+  if (!rows.length) { showToast('There is no data to export yet.', 'info'); return; }
+  downloadCSV(file, headers, rows);
+  if (currentRole === 'admin') logAdminAction('Exported data', what, { rows: rows.length });
+  showToast(`Exported ${rows.length} row${rows.length === 1 ? '' : 's'}.`, 'success');
+}
+
+// ════════════════════════════════════════════════
+// NOTIFICATIONS — summarised from the loaded data
+// ════════════════════════════════════════════════
+function notificationItems(role) {
+  const items = [];
+  if (role === 'member') {
+    const d = md();
+    const soon = (d.upcoming || []).filter(s => s.is_registered && new Date(s.start) - Date.now() < 7 * 864e5);
+    if (soon.length) items.push(`${soon.length} registered session${soon.length === 1 ? '' : 's'} this week`);
+    const unpaid = (d.upcoming || []).filter(s => s.is_registered && !zoomReady(s) && Number(s.fee) > 0);
+    if (unpaid.length) items.push(`${unpaid.length} payment${unpaid.length === 1 ? '' : 's'} pending`);
+    const recent = (d.certificates || []).filter(c => Date.now() - new Date(c.issued_at) < 7 * 864e5);
+    if (recent.length) items.push(`${recent.length} new certificate${recent.length === 1 ? '' : 's'}`);
+  } else {
+    const o = ad().overview || {};
+    if (Number(o.awaiting_sync)) items.push(`${o.awaiting_sync} session(s) awaiting attendance sync`);
+    if (Number(o.pending_payments)) items.push(`${o.pending_payments} pending payment(s)`);
+    if (Number(o.drafts)) items.push(`${o.drafts} draft session(s)`);
+  }
+  return items;
+}
+function toggleNotifications(role) {
+  const items = notificationItems(role);
+  showToast(items.length ? items.join(' · ') : 'No new notifications.', 'info', 4500);
+}
+function showBadge(id, value) {
+  const el = document.getElementById(id); if (!el) return;
+  el.style.display = value ? '' : 'none';
+  if (value && el.classList.contains('nb')) el.textContent = value;
+}
+function updateMemberBadges() {
+  showBadge('m-bell-dot', notificationItems('member').length > 0);
+  const dues = memberPayments ? memberDues().length : 0;
+  showBadge('m-nb-pay', dues ? String(dues) : '');
+}
+function updateAdminBadges() {
+  const o = ad().overview || {};
+  const current = adminMembers ? adminMembers.filter(m => m.role === 'member' && !m.archived).length : Number(o.total_members);
+  showBadge('a-nb-members', current ? fmtCompact(current).replace('+', '') : '');
+  showBadge('a-nb-sync', Number(o.awaiting_sync) ? String(o.awaiting_sync) : '');
+  showBadge('a-bell-dot', notificationItems('admin').length > 0);
+}
+
+// ════════════════════════════════════════════════
+// CONFETTI (pure client-side)
 // ════════════════════════════════════════════════
 function triggerConfetti(){
   const wrap=document.getElementById('confetti-wrap');
@@ -765,55 +3299,90 @@ function triggerConfetti(){
 }
 
 // ════════════════════════════════════════════════
-// AI BOT — shared, role-aware
-// BACKEND HOOK: sendBot() below replies from a hardcoded
-// keyword map (memberReplies / adminReplies). To wire in a
-// real AI backend, replace the matching block with:
-//
-//   const data = await apiRequest('/chatbot', {
-//     method: 'POST',
-//     body: JSON.stringify({ message: msg, role: currentRole, userId: loggedInUser?.id })
-//   });
-//   renderBotReply(data.reply);
-//
+// GAMEBOT — answers from the data already loaded
+// (no hardcoded facts; everything comes from Supabase)
 // ════════════════════════════════════════════════
-const memberReplies = {
-  'next session':'Your next session is **Advanced HR Analytics Workshop** with Dr. Ana Reyes on Jun 15 at 2:00 PM. The Join Now button activates when it goes live! 🎯',
-  'mid level':'To reach **Mid Level** you need:\n✅ 80% overall attendance (you\'re at 72%)\n✅ Complete at least 3 skill tree tracks\n✅ Earn 6+ certificates\n\nJoin 2 more sessions to hit 80%! 🚀',
-  'skill tree':'Your Skill Tree status:\n\n✅ **Recruitment Basics** — Completed!\n🟡 **Compliance** — 72% (In Progress)\n🔒 All other tracks — Locked\n\nHit 80% attendance to unlock next nodes! 💪',
-  'certificate':'You have **4 certificates** so far! 🏆\n1. Digital Onboarding (Apr 2025)\n2. DOLE Compliance (Mar 2025)\n3. HR Tech Tools (Feb 2025)\n4. Recruitment Mastery (Dec 2024)\n\nGo to the Certificates page to download or share on LinkedIn!',
-  'unlock':'To unlock the next node:\n📋 Reach 80% attendance (you\'re at 72%)\n🎯 Join 2 more sessions in Compliance track\n\nI recommend the upcoming DOLE Compliance Refresher! 💡',
-  'default':'I can help you navigate sessions, career path, and certificates. Try asking about your next session, how to reach Mid level, or where your certificates are! 😊'
-};
-const adminReplies = {
-  'last session':'The last completed session was **Digital Onboarding Masterclass** (Jun 5). 215/250 attended (86%). 215 certificates generated. Revenue: ₱53,750. 🎉',
-  'pending csv':'**1 pending CSV upload**: DOLE Compliance Refresher (Jun 10) — 98 attendees, 5 days overdue. Go to Attendance Management → Upload CSV.',
-  'payment':'Payment summary for June 2025:\n💚 Collected: ₱186,400\n⏳ Pending: ₱3,600 (8 members)\n🎁 Waivers: 12 members\n\nTop method: GCash (64%).',
-  'popular':'Most popular expertise area: **Recruitment** at 92% attendance. Compliance follows at 84%. Consider 2 more Recruitment sessions in Q3. 🎯',
-  'certificates':'June MTD: **215 certificates** issued from Digital Onboarding. DOLE Compliance pending (CSV not uploaded yet). Total this year: **1,842 certificates**. 🏆',
-  'attendance':'Average session attendance this month is **78%**, down 2% from last month. Cavite leads at 85%, Quezon is lowest at 58% — targeted outreach recommended.',
-  'default':'I can help with session stats, pending actions, member data, certificates, and payment summaries. Try asking about pending CSVs, last session stats, or payment summary! 🤖'
-};
-
+const BOT_GREETING_HTML = document.getElementById('bot-msgs')?.innerHTML || '';
+function resetBot() {
+  const msgs = document.getElementById('bot-msgs'); if (msgs) msgs.innerHTML = BOT_GREETING_HTML;
+  botOpen = false;
+  document.getElementById('bot-panel')?.classList.remove('open');
+}
 function setupMemberBot(){
-  document.getElementById('bot-role-label').textContent='Member AI Assistant';
-  document.getElementById('bot-greeting').textContent=`Hi ${loggedInUser?.name.split(' ')[0] || 'there'}! 👋 I'm GameBot. I can help you with sessions, career path, and certificates. What do you need?`;
+  setText('bot-role-label', 'Member Assistant');
+  setText('bot-greeting', `Hi ${loggedInUser?.name.split(' ')[0] || 'there'}! 👋 I'm GameBot. I can help you with sessions, career path, and certificates. What do you need?`);
   document.getElementById('bot-qp').innerHTML=`
     <div class="qp" onclick="sendBot('Show my next session')">📅 Next session</div>
-    <div class="qp" onclick="sendBot('How do I reach Mid level?')">🚀 Mid level</div>
+    <div class="qp" onclick="sendBot('What is my attendance?')">📊 Attendance</div>
     <div class="qp" onclick="sendBot('Where am I in Skill Tree?')">🗺 Skill Tree</div>
     <div class="qp" onclick="sendBot('Where is my certificate?')">🏆 Certificates</div>
     <div class="qp" onclick="sendBot('How do I unlock the next node?')">🔓 Unlock node</div>`;
 }
 function setupAdminBot(){
-  document.getElementById('bot-role-label').textContent='Admin AI Assistant';
-  document.getElementById('bot-greeting').textContent='Hi Juan! 👋 I\'m GameBot. I can help with session stats, member data, certificate status, and payment summaries. What do you need?';
+  setText('bot-role-label', 'Admin Assistant');
+  setText('bot-greeting', `Hi ${loggedInUser?.name.split(' ')[0] || 'there'}! 👋 I'm GameBot. I can help with session stats, member data, certificate status, and payment summaries. What do you need?`);
   document.getElementById('bot-qp').innerHTML=`
     <div class="qp" onclick="sendBot('Last session stats')">📊 Last session</div>
-    <div class="qp" onclick="sendBot('Pending CSV uploads')">⏳ Pending CSVs</div>
+    <div class="qp" onclick="sendBot('Sessions awaiting sync')">⏳ Awaiting sync</div>
     <div class="qp" onclick="sendBot('Payment summary')">💳 Payments</div>
     <div class="qp" onclick="sendBot('Most popular area')">🎯 Top area</div>
     <div class="qp" onclick="sendBot('Certificates this month')">🏆 Certs</div>`;
+}
+function memberBotReply(ml) {
+  const d = md(), st = d.stats || {};
+  if (!memberData) return "I couldn't load your data right now. Please refresh the page.";
+  if (/session|next|join/.test(ml)) {
+    const s = memberNextSession();
+    if (!s) return 'There are no upcoming sessions yet. Check back soon! 📅';
+    return `Your next session is **${s.title}** with ${s.speaker} on ${fmtDate(s.start)} at ${fmtTime(s.start)}.${s.is_registered ? " You're registered ✅" : ' You are not registered yet — open the Attendance page to register.'}`;
+  }
+  if (/attendance|level|mid|progress/.test(ml)) {
+    const a = Number(st.attended || 0), m = Number(st.missed || 0);
+    if (!a && !m) return `You're at **${d.me?.mastery_level || 'Entry'}** level. You have no completed sessions yet — attend a session to start building your attendance rate. 🚀`;
+    const need = sessionsNeededFor80(a, m);
+    return `Your attendance is **${st.rate}%** (${a} attended, ${m} missed). ${need ? `Attend **${need} more** session${need === 1 ? '' : 's'} to reach the 80% goal. 🎯` : "You're above the 80% goal! 🎉"}`;
+  }
+  if (/skill|tree|career|node|unlock/.test(ml)) {
+    const nodes = d.skill_tree || [];
+    if (!nodes.length) return 'Your career path has not been set up yet. 🗺';
+    const done = nodes.filter(n => n.status === 'COMPLETED'), act = nodes.filter(n => n.status === 'IN_PROGRESS'), lock = nodes.filter(n => n.status === 'LOCKED');
+    return `Your Skill Tree:\n✅ Completed: **${done.length}**${done.length ? ' (' + done.slice(0, 3).map(n => n.title).join(', ') + ')' : ''}\n🟡 In progress: **${act.length}**${act.length ? ' (' + act.slice(0, 3).map(n => `${n.title} ${Math.round(n.progress)}%`).join(', ') + ')' : ''}\n🔒 Locked: **${lock.length}**\n\nAttend sessions in an area to unlock its next node. 💪`;
+  }
+  if (/cert/.test(ml)) {
+    const c = d.certificates || [];
+    if (!c.length) return "You don't have certificates yet. Attend at least 80% of a session to earn one! 🏆";
+    return `You have **${c.length} certificate${c.length === 1 ? '' : 's'}** 🏆\n` + c.slice(0, 5).map((x, i) => `${i + 1}. ${x.title} (${fmtDateShort(x.issued_at)})`).join('\n') + '\n\nOpen the Certificates page to view them.';
+  }
+  return 'I can help with your next session, attendance, skill tree, and certificates. Try one of the buttons below! 😊';
+}
+function adminBotReply(ml) {
+  const d = ad(), o = d.overview || {};
+  if (!adminData) return "I couldn't load the dashboard data right now. Please refresh the page.";
+  if (/last session/.test(ml)) {
+    const s = (d.sessions || []).filter(isPastSession).filter(x => x.status !== 'Cancelled')[0];
+    if (!s) return 'No session has finished yet. 📅';
+    return `The last session was **${s.title}** (${fmtDate(s.start)}). ${fmtInt(s.attended)}/${fmtInt(s.registered)} registered members attended. ${fmtInt(s.certs)} certificate(s) issued. Revenue: ${fmtMoney(s.revenue)}.`;
+  }
+  if (/sync|pending csv|awaiting/.test(ml)) {
+    const list = (d.sessions || []).filter(s => isPastSession(s) && s.status !== 'Cancelled' && Number(s.registered) && !Number(s.log_count));
+    if (!list.length) return 'All finished sessions have their attendance synced. ✅';
+    return `**${list.length} session(s)** awaiting attendance sync:\n` + list.slice(0, 5).map(s => `• ${s.title} (${fmtDateShort(s.start)})`).join('\n') + '\n\nGo to Session and Attendance → Attendance Sync.';
+  }
+  if (/payment|revenue/.test(ml)) {
+    return `Payment summary:\n💚 Collected: **${fmtMoney(o.revenue_total)}** (${fmtMoney(o.revenue_month)} this month)\n⏳ Pending: **${fmtMoney(o.pending_amount)}** (${fmtInt(o.pending_payments)} payment(s))\nTotal transactions: ${fmtInt(o.transactions)}`;
+  }
+  if (/popular|area|expertise/.test(ml)) {
+    const a = (d.by_area || []).filter(x => x.rate != null);
+    if (!a.length) return 'Not enough attendance data to rank areas yet. 🎯';
+    return `The best-attended area is **${a[0].name}** at ${a[0].rate}% attendance.` + (a[1] ? ` ${a[1].name} follows at ${a[1].rate}%.` : '');
+  }
+  if (/cert/.test(ml)) return `Certificates: **${fmtInt(o.certs_month)}** issued this month, **${fmtInt(o.certs_total)}** in total. 🏆`;
+  if (/attendance/.test(ml)) {
+    const p = (d.by_province || []).filter(x => x.rate != null);
+    return `Average attendance is **${fmtPct(o.attendance_rate)}**.` + (p.length > 1 ? ` ${p[0].name} leads at ${p[0].rate}%, ${p[p.length - 1].name} is lowest at ${p[p.length - 1].rate}%.` : '');
+  }
+  if (/member/.test(ml)) return `There are **${fmtInt(o.total_members)} members** (${fmtInt(o.new_members_month)} new this month).`;
+  return 'I can help with session stats, attendance sync, member numbers, certificates, and payment summaries. Try one of the buttons below! 🤖';
 }
 function toggleBot(){
   botOpen=!botOpen;
@@ -824,35 +3393,22 @@ function sendBot(msg){
   const msgs=document.getElementById('bot-msgs');
   msgs.innerHTML+=`<div class="bmsg u">${escapeHtml(msg)}</div>`;
   document.getElementById('bot-in').value='';
-
-  // BACKEND HOOK: swap this local keyword lookup for a real API call — see
-  // the comment block above this function for the exact fetch() shape.
-  const replies=currentRole==='admin' ? adminReplies : memberReplies;
-  let reply=replies['default'];
-  const ml=msg.toLowerCase();
-  for(const k in replies){
-    if(k!=='default'&&ml.includes(k)){reply=replies[k];break;}
-  }
+  const ml = msg.toLowerCase();
+  const reply = currentRole === 'admin' ? adminBotReply(ml) : memberBotReply(ml);
   setTimeout(()=>{
-    msgs.innerHTML+=`<div class="bmsg b">${reply.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}</div>`;
+    msgs.innerHTML+=`<div class="bmsg b">${esc(reply).replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}</div>`;
     msgs.scrollTop=msgs.scrollHeight;
-  },550);
+  },400);
   msgs.scrollTop=msgs.scrollHeight;
   if(!botOpen)toggleBot();
 }
-function escapeHtml(s){
-  const d=document.createElement('div');
-  d.textContent=s;
-  return d.innerHTML;
-}
+function escapeHtml(s){ return esc(s); }
 
 // ════════════════════════════════════════════════
 // INIT
-// BACKEND HOOK: this is the natural place to kick off
-// an initial data load, e.g.:
-//   apiRequest('/stats/overview').then(s => { ...populate lh-stat-* ... });
 // ════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('m-today').textContent = todayStr();
   document.getElementById('a-date').textContent = todayStr();
 });
+loadPublicStats();
