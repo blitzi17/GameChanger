@@ -1377,7 +1377,7 @@ function openSessionView(sessionId) {
   let footer = `<button class="btn btn-ghost" onclick="closeMo('m-session-view')">← Back</button>`;
   if (s.is_registered) {
     note.style.display = 'block'; note.style.background = 'var(--green-l)'; note.style.color = 'var(--green)';
-    note.textContent = zoomReady(s) ? "You're registered. The Join button opens when the session starts."
+    note.textContent = zoomReady(s) ? "You're registered. The Join button opens 15 minutes before the session starts."
       : s.payment_status === 'PENDING_PAYMENT' ? "You're registered. Your payment is waiting for an admin to confirm it — the Zoom link unlocks after that."
       : "You're registered. Pay the admission fee and submit your reference number to unlock the Zoom link.";
     if (!zoomReady(s) && s.payment_status !== 'PENDING_PAYMENT' && Number(s.fee) > 0) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment</button>`;
@@ -1401,7 +1401,8 @@ function openJoinModal(sessionId) {
   const s = (md().upcoming || []).find(x => x.session_id === sessionId);
   if (!s) return;
   if (!s.is_registered) { openSessionView(sessionId); return; }
-  const live = sessionIsLive(s);
+  const live = Date.now() >= new Date(s.start).getTime() - 15 * 60 * 1000
+  && Date.now() < new Date(s.end).getTime();
   setHtml('m-join-body', `You're joining: <strong>${esc(s.title)}</strong> with ${esc(s.speaker)}<br><br>📅 ${fmtDate(s.start)} · ${fmtTime(s.start)} · ${esc(s.duration)} min<br><br>You may wait in the Zoom waiting room until the host lets you in. Your attendance is recorded from Zoom automatically.`);
   let footer;
   if (!s.is_registered) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');registerForSession('${esc(s.session_id)}')">+ Register</button>`;
@@ -1409,7 +1410,7 @@ function openJoinModal(sessionId) {
   else if (!zoomReady(s) && Number(s.fee) > 0) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment to unlock Zoom</button>`;
   else if (!zoomReady(s)) footer = `<span class="badge bg-y">⏳ The Zoom link isn't ready yet</span>`;
   else if (live) footer = `<button class="btn btn-primary" onclick="handleJoinSession('${esc(s.session_id)}', this)">🚀 Join Now</button>`;
-  else footer = `<span class="badge bg-b">🔒 Join opens at ${fmtTime(s.start)}, when the session starts</span>`;
+  else footer = `<span class="badge bg-b">🔒 Join opens 15 minutes before the scheduled start</span>`;
   setHtml('m-join-footer', footer + `<button class="btn btn-ghost" onclick="closeMo('m-join-modal')">Close</button>`);
   openMo('m-join-modal');
 }
@@ -1419,7 +1420,10 @@ function zoomReady(s) { return s.zoom_ready !== undefined ? !!s.zoom_ready : !!s
 async function handleJoinSession(sessionId, btn) {
   const s = (md().upcoming || []).find(x => x.session_id === sessionId);
   if (!s || !zoomReady(s)) { showToast('The Zoom link is not available yet.', 'info'); return; }
-  if (Date.now() < new Date(s.start).getTime()) { showToast(`This session hasn't started yet. You can join at ${fmtTime(s.start)}.`, 'info', 5000); return; }
+    if (Date.now() < new Date(s.start).getTime() - 15 * 60 * 1000) {
+    showToast('Joining opens 15 minutes before the scheduled start.', 'info', 5000);
+    return;
+  }
   let url = s.zoom_join_url;                               // only present if 15_join_lock.sql hasn't been run
   if (!url) {
     const tab = window.open('', '_blank');                 // open first — browsers block tabs opened after waiting
@@ -1456,8 +1460,14 @@ function startCountdown() {
       const el = document.getElementById(id); if (!el) return;
       if (now >= end) { el.className = 'btn btn-disabled btn-sm'; el.textContent = 'Session ended'; }
       else if (!s.is_registered) { el.className = 'btn btn-outline btn-sm'; el.textContent = '👁 View session'; }
-      else if (now >= start) { el.className = 'btn btn-red btn-sm'; el.textContent = '🔴 Join Now — LIVE!'; }
-      else { el.className = 'btn btn-disabled btn-sm'; el.textContent = '🔒 Join opens at start'; }
+      else if (now >= start - 15 * 60 * 1000) {
+        el.className = 'btn btn-red btn-sm';
+        el.textContent = now < start ? '🎯 Join Now — Early Access' : '🔴 Join Now — LIVE!';
+      }
+      else {
+        el.className = 'btn btn-disabled btn-sm';
+        el.textContent = '🔒 Join opens 15 min before start';
+      }
     });
     if (now >= end) stopCountdown();
   };
