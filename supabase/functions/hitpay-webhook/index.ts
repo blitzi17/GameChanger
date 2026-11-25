@@ -72,6 +72,9 @@ function mapPaymentChannel(method: string) {
     case "card_cybersource":
       return "CARD";
 
+    case "qrph_netbank":
+      return "QR_PH";
+
     default:
       return null;
   }
