@@ -14,6 +14,7 @@
      Keep these three files in the same folder.
 ════════════════════════════════════════════ -->
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="payment.css">
 </head>
 <body>
 
@@ -315,11 +316,56 @@
         <div id="mpay-dues"></div>
       </div>
       <div class="fbar">
-        <select class="fs2" style="width:auto;" id="mpay-status" onchange="renderMemberPayments()"><option value="">All Status</option><option value="PAID">Paid</option><option value="PENDING_PAYMENT">Pending</option><option value="FAILED">Failed</option><option value="REFUNDED">Refunded</option></select>
-        <input class="fi2" id="mpay-search" placeholder="Search session..." style="max-width:220px;" oninput="renderMemberPayments()">
+        <select class="fs2"
+          style="width:auto;"
+          id="mpay-status"
+          onchange="renderMemberPayments()">
+          <option value="">All Status</option>
+          <option value="PAID">Paid</option>
+          <option value="PENDING_PAYMENT">Pending</option>
+          <option value="FAILED">Failed</option>
+          <option value="CANCELLED">Cancelled</option>
+          <option value="REFUNDED">Refunded</option>
+          <option value="REVIEW_REQUIRED">Review required</option>
+          <option value="WAIVED">Waived</option>
+          <option value="UNPAID">Unpaid</option>
+        </select>
+        <input class="fi2" id="mpay-search" placeholder="Search session or reference..." style="max-width:220px;" oninput="renderMemberPayments()">
         <button class="btn btn-ghost btn-sm" onclick="handleExport('my payments')">⬇ Export</button>
       </div>
-      <div class="card"><table class="dt"><thead><tr><th>Session</th><th>Amount</th><th>Method</th><th>Date</th><th>Reference</th><th>Status</th></tr></thead><tbody id="mpay-tbody"></tbody></table></div>
+      <!-- HITPAY_MEMBER_PAYMENT_HISTORY_V1 -->
+
+      <!-- HITPAY_MEMBER_PAYMENT_ACTIONS_V1 -->
+
+      <div class="hp-history-notice">
+        Sandbox payments are test transactions.
+        They are excluded from actual payment totals.
+        Transaction history includes both ordinary
+        and sandbox records.
+
+        <div class="hp-history-note">
+          HitPay receipts require current server
+          verification. Select View receipt to check
+          the payment before opening its verified receipt.
+        </div>
+      </div>
+
+      <div class="card hp-history-table">
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>Session</th>
+              <th>Amount</th>
+              <th>Method</th>
+              <th>Date</th>
+              <th>Reference</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mpay-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- CERTIFICATE -->
@@ -656,8 +702,13 @@
         <div class="card cp" style="text-align:center;"><div style="font-size:20px;font-weight:800;font-family:var(--font-h);color:var(--yellow);" id="a-pay-pending">—</div><div style="font-size:12px;color:var(--t2);" id="a-pay-pending-lbl">Pending</div></div>
         <div class="card cp" style="text-align:center;"><div style="font-size:20px;font-weight:800;font-family:var(--font-h);color:var(--blue);" id="a-pay-count">—</div><div style="font-size:12px;color:var(--t2);">Transactions</div></div>
       </div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:12px;">
+        HitPay Sandbox records are test transactions.
+        They are excluded from financial totals and cannot
+        be manually confirmed.
+      </div>
       <div id="a-pay-review" style="display:none;"></div>
-      <div class="fbar"><select class="fs2" style="width:auto;" id="a-pay-session" onchange="renderPayments()"><option value="">All Sessions</option></select><select class="fs2" style="width:auto;" id="a-pay-status" onchange="renderPayments()"><option value="">All Status</option><option value="PENDING_PAYMENT">To confirm</option><option value="UNPAID">Not paid yet</option><option value="PAID">Paid</option><option value="FAILED">Rejected / failed</option><option value="CANCELLED">Cancelled</option><option value="REFUNDED">Refunded</option></select><input class="fi2" id="a-pay-search" placeholder="Search member..." style="max-width:180px;" oninput="renderPayments()"><button class="btn btn-ghost btn-sm" onclick="handleExport('payments Excel')">⬇ Export</button></div>
+      <div class="fbar"><select class="fs2" style="width:auto;" id="a-pay-session" onchange="renderPayments()"><option value="">All Sessions</option></select><select class="fs2" style="width:auto;" id="a-pay-status" onchange="renderPayments()"><option value="">All Status</option><option value="PENDING_PAYMENT">To confirm</option><option value="UNPAID">Not paid yet</option><option value="PAID">Paid</option><option value="FAILED">Rejected / failed</option><option value="CANCELLED">Cancelled</option><option value="REFUNDED">Refunded</option><option value="REVIEW_REQUIRED">Review required</option><option value="WAIVED">Waived</option></select><input class="fi2" id="a-pay-search" placeholder="Member or reference..." style="max-width:180px;" oninput="renderPayments()"><button class="btn btn-ghost btn-sm" onclick="handleExport('payments Excel')">⬇ Export</button></div>
       <!-- Members submit their reference number; admins confirm or reject it here (13_payments.sql). -->
       <div class="card"><table class="dt"><thead><tr><th>Member</th><th>Session</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody id="a-payments-tbody"></tbody></table></div>
     </div>
@@ -776,12 +827,15 @@
       <div id="apd-extra-row" style="display:none;gap:10px;"><div style="font-size:12px;color:var(--t3);min-width:110px;" id="apd-extra-label">—</div><div style="font-size:13px;font-weight:600;" id="apd-extra">—</div></div>
     </div>
   </div>
-  <div class="mf"><button class="btn btn-ghost" onclick="closeMo('a-payment-detail')">Close</button></div></div>
+  <div id="apd-hitpay-details" hidden
+      style="padding:12px;font-size:12px;overflow-wrap:anywhere;">
+    </div>
+    <div class="mf"><button class="btn btn-ghost" onclick="closeMo('a-payment-detail')">Close</button></div></div>
 </div>
 
 <!-- ADMIN: confirm / reject / mark as paid -->
 <div class="mo" id="a-pay-review-mo">
-  <div class="modal"><div class="mh"><div class="mt" id="apr-title">Confirm Payment</div><button class="mc" onclick="closeMo('a-pay-review-mo')">✕</button></div>
+  <div class="modal"><div class="mh"><div class="mt" id="apr-title">Review Manual Payment</div><button class="mc" onclick="closeMo('a-pay-review-mo')">✕</button></div>
   <div class="mb">
     <div id="apr-summary" style="font-size:13px;line-height:1.6;padding:11px 13px;background:var(--bg);border-radius:var(--r2);margin-bottom:12px;"></div>
     <div id="apr-mark" style="display:none;">
@@ -799,7 +853,7 @@
 
 <!-- MEMBER: submit payment reference -->
 <div class="mo" id="m-submit-payment">
-  <div class="modal"><div class="mh"><div class="mt">💳 Submit Payment</div><button class="mc" onclick="closeMo('m-submit-payment')">✕</button></div>
+  <div class="modal"><div class="mh"><div class="mt">💳 Submit Manual Payment Reference</div><button class="mc" onclick="closeMo('m-submit-payment')">✕</button></div>
   <div class="mb">
     <div id="msp-summary" style="font-size:13px;line-height:1.5;padding:11px 13px;background:var(--bg);border-radius:var(--r2);margin-bottom:12px;"></div>
     <div id="msp-accounts" style="margin-bottom:12px;"></div>
@@ -809,6 +863,464 @@
     <div id="msp-err" style="display:none;background:var(--red-l);border-radius:var(--r2);padding:10px 13px;margin-top:10px;font-size:12px;color:var(--red-d);"></div>
   </div>
   <div class="mf"><button class="btn btn-ghost" onclick="closeMo('m-submit-payment')">Cancel</button><button class="btn btn-primary" id="msp-go" onclick="submitMemberPayment()">Submit for confirmation</button></div></div>
+</div>
+
+
+<!-- HITPAY: SANDBOX CHECKOUT -->
+
+<div class="mo" id="hp-checkout-mo">
+
+  <div class="modal hp-modal"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="hp-checkout-title">
+
+    <div class="mh">
+
+      <div class="mt" id="hp-checkout-title">
+        Pay to Register
+      </div>
+
+      <button class="mc"
+              type="button"
+              aria-label="Close payment window"
+              onclick="closeMo('hp-checkout-mo')">
+        &#10005;
+      </button>
+
+    </div>
+
+    <div class="mb hp-content">
+
+      <div>
+
+        <span class="hp-sandbox-label">
+          HitPay Sandbox
+        </span>
+
+      </div>
+
+      <div class="hp-summary">
+
+        <div class="hp-label">
+          Training Session
+        </div>
+
+        <div class="hp-session-title"
+             id="hp-session-title">
+          &mdash;
+        </div>
+
+        <div class="hp-divider"></div>
+
+        <div class="hp-label">
+          Admission Fee
+        </div>
+
+        <div class="hp-amount"
+             id="hp-session-amount">
+          &mdash;
+        </div>
+
+      </div>
+
+      <div class="hp-provider">
+
+        <div class="hp-provider-icon"
+             aria-hidden="true">
+          &#128179;
+        </div>
+
+        <div>
+
+          <div class="hp-provider-name">
+            HitPay
+          </div>
+
+          <div class="hp-provider-description">
+            Hosted sandbox payment checkout.
+            Available payment methods are provided
+            by the payment gateway.
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="hp-sandbox-notice">
+
+        <strong>Sandbox testing only.</strong>
+
+        No real funds or real payment details
+        should be used.
+
+        Registration is confirmed only after
+        successful backend payment verification.
+
+      </div>
+
+      <div id="hp-checkout-message"
+           class="hp-status-message"
+           role="status"
+           aria-live="polite"
+           hidden>
+      </div>
+
+    </div>
+
+    <div class="mf hp-actions">
+
+      <button class="btn btn-ghost"
+              type="button"
+              onclick="closeMo('hp-checkout-mo')">
+        Close
+      </button>
+
+      <button class="btn btn-primary"
+              type="button"
+              id="hp-checkout-go"
+              disabled>
+
+        Pay to Register
+
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- HITPAY: PAYMENT STATUS -->
+
+<div class="mo" id="hp-status-mo">
+
+  <div class="modal hp-modal"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="hp-status-heading">
+
+    <div class="mh">
+
+      <div class="mt" id="hp-status-heading">
+        Payment Status
+      </div>
+
+      <button class="mc"
+              type="button"
+              aria-label="Close payment status"
+              onclick="closeMo('hp-status-mo')">
+        &#10005;
+      </button>
+
+    </div>
+
+    <div class="mb hp-content">
+
+      <div>
+
+        <span class="hp-sandbox-label">
+          HitPay Sandbox
+        </span>
+
+      </div>
+
+      <div class="hp-status hp-status-neutral"
+           id="hp-status-box"
+           role="status"
+           aria-live="polite">
+
+        <div class="hp-status-icon"
+             id="hp-status-icon"
+             aria-hidden="true">
+        </div>
+
+        <div class="hp-status-title"
+             id="hp-status-title">
+          Payment Status
+        </div>
+
+        <div class="hp-status-message"
+             id="hp-status-message">
+          &mdash;
+        </div>
+
+      </div>
+
+      <div class="hp-reference-box">
+
+        <div class="hp-label">
+          Order Reference
+        </div>
+
+        <div class="hp-reference-value"
+             id="hp-order-reference">
+          &mdash;
+        </div>
+
+      </div>
+
+      <div class="hp-reference-box"
+           id="hp-transaction-reference-box"
+           hidden>
+
+        <div class="hp-label">
+          Transaction Reference
+        </div>
+
+        <div class="hp-reference-value"
+             id="hp-transaction-reference">
+          &mdash;
+        </div>
+
+      </div>
+
+      <!-- HITPAY_RECONCILIATION_GUIDANCE_V1 -->
+
+      <div class="hp-sandbox-notice"
+           id="hp-review-notice"
+           hidden>
+
+        <strong>Payment Requires Review</strong>
+
+        <p>
+          Your existing payment requires further verification.
+          Do not start another payment.
+        </p>
+
+        <p>
+          Use Check Payment Status to retrieve the latest
+          recorded payment information.
+        </p>
+
+        <p>
+          If the issue remains unresolved, contact the
+          GameChanger administrator and provide your
+          Order Reference.
+        </p>
+
+        <p>
+          Registration and receipt availability depend
+          on successful payment verification.
+        </p>
+
+      </div>
+
+    </div>
+
+    <div class="mf hp-actions">
+
+      <button class="btn btn-ghost"
+              type="button"
+              onclick="closeMo('hp-status-mo')">
+        Close
+      </button>
+
+      <button class="btn btn-primary"
+              type="button"
+              id="hp-status-refresh"
+              disabled>
+        Check Payment Status
+      </button>
+
+      <button class="btn btn-green"
+              type="button"
+              id="hp-view-receipt"
+              disabled
+              hidden>
+        View Receipt
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- HITPAY: VERIFIED PAYMENT RECEIPT -->
+
+<div class="mo" id="hp-receipt-mo">
+
+  <div class="modal hp-modal"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="hp-receipt-heading">
+
+    <div class="mh">
+
+      <div class="mt" id="hp-receipt-heading">
+        Payment Receipt
+      </div>
+
+      <button class="mc"
+              type="button"
+              aria-label="Close receipt"
+              onclick="closeMo('hp-receipt-mo')">
+        &#10005;
+      </button>
+
+    </div>
+
+    <div class="mb hp-content">
+
+      <div class="hp-sandbox-notice">
+
+        Sandbox receipt only.
+        This is not evidence of a real financial payment.
+
+      </div>
+
+      <div class="hp-receipt"
+           id="hp-receipt-content"
+           hidden>
+
+        <div class="hp-receipt-header">
+
+          <div class="hp-receipt-title">
+            GameChanger
+          </div>
+
+          <div class="hp-receipt-subtitle">
+            HR Calabarzon
+          </div>
+
+          <div class="hp-receipt-subtitle">
+            HitPay Sandbox Receipt
+          </div>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Session
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-session">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Order Reference
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-order">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Transaction Reference
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-transaction">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Registration ID
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-registration">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Payment Method
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-method">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Payment Date
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-date">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Payment Provider
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-provider">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-row">
+
+          <span class="hp-receipt-key">
+            Payment Status
+          </span>
+
+          <span class="hp-receipt-value"
+                id="hp-receipt-status">
+            &mdash;
+          </span>
+
+        </div>
+
+        <div class="hp-receipt-total">
+
+          <strong>Total Amount</strong>
+
+          <span class="hp-receipt-total-value"
+                id="hp-receipt-amount">
+            &mdash;
+          </span>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <div class="mf hp-actions">
+
+      <button class="btn btn-ghost"
+              type="button"
+              onclick="closeMo('hp-receipt-mo')">
+        Close
+      </button>
+
+    </div>
+
+  </div>
+
 </div>
 
 <!-- SHARED AI BOT -->
@@ -871,6 +1383,33 @@
 ════════════════════════════════════════════ -->
 <!-- Supabase JS client (browser build). Must load BEFORE script.js. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="payment-return.js"></script>
+<script src="payment.js"></script>
 <script src="script.js"></script>
+<script src="payment-ui.js"></script>
+
+<!-- HITPAY PAYMENT CONTROLLER INITIALIZATION -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+        try {
+
+            GameChangerPaymentUI.initialize();
+
+            console.info(
+                '[HitPay Sandbox] Payment interface initialized.'
+            );
+
+        } catch (error) {
+
+            console.error(
+                '[HitPay Sandbox] Interface initialization failed:',
+                error
+            );
+
+        }
+
+    });
+</script>
 </body>
 </html>

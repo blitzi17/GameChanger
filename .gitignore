@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# HitPay generated files and secrets
+__pycache__/
+*.pyc
+supabase/hitpay_combined_*.sql
+.env
+.env.*
+!.env.example
+supabase/.temp/
+
+/dist/

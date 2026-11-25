@@ -1,0 +1,472 @@
+
+/* ============================================================
+   GameChanger — HR Calabarzon
+   payment.css
+
+   UC-PAM-01 — Process Payment
+   HitPay Sandbox Payment Interface
+============================================================ */
+
+
+/* PAYMENT MODAL */
+
+.hp-modal {
+    max-width: 540px;
+    width: 100%;
+}
+
+.hp-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+
+/* SANDBOX INDICATOR */
+
+.hp-sandbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: var(--yellow-l);
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.hp-sandbox-notice {
+    padding: 12px 14px;
+    background: var(--yellow-l);
+    border: 1px solid #fde68a;
+    border-radius: var(--r2);
+    color: #92400e;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+
+/* PAYMENT SUMMARY */
+
+.hp-summary {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--r3);
+    background: var(--bg);
+}
+
+.hp-label {
+    color: var(--t2);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.hp-session-title {
+    margin-top: 6px;
+    font-family: var(--font-h);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--t1);
+    overflow-wrap: anywhere;
+}
+
+.hp-divider {
+    height: 1px;
+    margin: 16px 0;
+    background: var(--border);
+}
+
+.hp-amount {
+    margin-top: 6px;
+    font-family: var(--font-h);
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--t1);
+}
+
+
+/* PAYMENT PROVIDER */
+
+.hp-provider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    background: var(--white);
+}
+
+.hp-provider-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: var(--blue-l);
+    color: var(--blue);
+    font-size: 20px;
+}
+
+.hp-provider-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--t1);
+}
+
+.hp-provider-description {
+    margin-top: 4px;
+    color: var(--t2);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+
+/* PAYMENT STATUS */
+
+.hp-status {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--r3);
+    background: var(--bg);
+    text-align: center;
+}
+
+.hp-status-icon {
+    margin-bottom: 10px;
+    font-size: 30px;
+}
+
+.hp-status-title {
+    font-family: var(--font-h);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.hp-status-message {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.hp-status-pending {
+    background: var(--yellow-l);
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+.hp-status-paid {
+    background: var(--green-l);
+    border-color: #bbf7d0;
+    color: var(--green);
+}
+
+.hp-status-failed,
+.hp-status-cancelled {
+    background: var(--red-l);
+    border-color: #fecaca;
+    color: var(--red-d);
+}
+
+.hp-status-review {
+    background: var(--orange-l);
+    border-color: #fed7aa;
+    color: var(--orange);
+}
+
+.hp-status-neutral {
+    background: var(--bg);
+    border-color: var(--border);
+    color: var(--t2);
+}
+
+
+/* PAYMENT REFERENCES */
+
+.hp-reference-box {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    background: var(--white);
+}
+
+.hp-reference-value {
+    margin-top: 6px;
+    color: var(--t1);
+    font-size: 12px;
+    font-family: monospace;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+
+/* VERIFIED RECEIPT */
+
+.hp-receipt {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--r3);
+    background: var(--white);
+}
+
+.hp-receipt-header {
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px dashed var(--border2);
+    text-align: center;
+}
+
+.hp-receipt-title {
+    font-family: var(--font-h);
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--t1);
+}
+
+.hp-receipt-subtitle {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--t2);
+}
+
+.hp-receipt-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.hp-receipt-row:last-child {
+    border-bottom: none;
+}
+
+.hp-receipt-key {
+    color: var(--t2);
+}
+
+.hp-receipt-value {
+    color: var(--t1);
+    font-weight: 600;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.hp-receipt-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border2);
+}
+
+.hp-receipt-total-value {
+    font-family: var(--font-h);
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--green);
+}
+
+
+/* PAYMENT ACTIONS */
+
+.hp-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.hp-actions .btn {
+    justify-content: center;
+}
+
+.hp-actions .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+
+/* LOADING INDICATOR */
+
+.hp-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: hp-spin 0.8s linear infinite;
+}
+
+@keyframes hp-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* ACCESSIBILITY */
+
+.hp-modal button:focus-visible {
+    outline: 3px solid var(--blue);
+    outline-offset: 3px;
+}
+
+.hp-modal [hidden] {
+    display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hp-spinner {
+        animation: none;
+    }
+}
+
+
+/* RESPONSIVE PAYMENT INTERFACE */
+
+@media (max-width: 600px) {
+
+    .hp-modal {
+        max-width: 100%;
+    }
+
+    .hp-summary,
+    .hp-receipt,
+    .hp-status {
+        padding: 16px;
+    }
+
+    .hp-amount {
+        font-size: 28px;
+    }
+
+    .hp-actions {
+        flex-direction: column;
+    }
+
+    .hp-actions .btn {
+        width: 100%;
+    }
+
+    .hp-receipt-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 5px;
+    }
+
+    .hp-receipt-value {
+        text-align: left;
+    }
+
+}
+
+
+/* HITPAY_MEMBER_PAYMENT_HISTORY_V1 */
+
+#mp-payments .hp-history-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+}
+
+#mp-payments .hp-history-provider,
+#mp-payments .hp-history-sandbox {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+#mp-payments .hp-history-provider {
+    background: var(--blue-l, #EFF6FF);
+    color: var(--blue, #2563EB);
+}
+
+#mp-payments .hp-history-sandbox {
+    background: var(--yellow-l, #FEF3C7);
+    color: #92400E;
+}
+
+#mp-payments .hp-history-note,
+#mp-payments .hp-history-order {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--t3);
+}
+
+#mp-payments .hp-history-reference {
+    font-size: 12px;
+    color: var(--t2);
+    overflow-wrap: anywhere;
+}
+
+#mp-payments .hp-history-notice {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--t2);
+}
+
+#mp-payments .hp-history-table {
+    overflow-x: auto;
+}
+
+#mp-payments .hp-history-table .dt {
+    min-width: 720px;
+}
+
+#mp-payments .hp-history-table td {
+    vertical-align: top;
+}
+
+
+
+/* HITPAY_MEMBER_PAYMENT_ACTIONS_V1 */
+
+#mp-payments .hp-history-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 110px;
+}
+
+#mp-payments .hp-history-actions .btn {
+    white-space: nowrap;
+    justify-content: center;
+}
+
+#mp-payments .hp-history-actions .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+#mp-payments .hp-history-actions .btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 3px;
+}
+
+#mp-payments .hp-history-table .dt {
+    min-width: 860px;
+}
