@@ -31,8 +31,8 @@ const GameChangerPayment = (() => {
         createPaymentFunction: 'create-payment',
         paymentStatusFunction: 'payment-status',
         // HITPAY_BACKEND_READINESS_V1
-        checkoutEnabled: false,
-        paymentStatusEnabled: false,
+        checkoutEnabled: true,
+        paymentStatusEnabled: true,
 
         // HITPAY_CHECKOUT_URL_PROTECTION_V1
         // Populate only after the exact sandbox checkout

@@ -173,7 +173,7 @@ export function validateHitPayCheckoutURL(
 // Backend checkout remains disabled independently
 // of the frontend readiness configuration.
 
-const CHECKOUT_SERVICE_ENABLED: boolean = false;
+const CHECKOUT_SERVICE_ENABLED: boolean = true;
 
 
 export function assertHitPayCheckoutReady(): void {

@@ -1,28 +1,11 @@
-
-import {
-  createMemberClient,
-  createAdminClient,
-} from "../_shared/supabase.ts";
+import { createAdminClient, createMemberClient } from "../_shared/supabase.ts";
 
 const APP_URL = "https://game-changer-sigma.vercel.app";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": APP_URL,
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store",
-    },
-  });
-}
+const ALLOWED_ORIGINS = new Set([
+  APP_URL,
+  "https://game-changer-git-feature-proces-21fc05-karols-projects-95a784de.vercel.app",
+]);
 
 function isNonEmptyString(value: unknown): value is string {
   return (
@@ -41,6 +24,41 @@ function isValidDate(value: unknown): boolean {
 // HITPAY_STATUS_RESPONSE_PROTECTION_V1
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get("Origin") ?? "";
+
+  if (!ALLOWED_ORIGINS.has(origin)) {
+    return new Response(
+      JSON.stringify({ error: "Origin not allowed." }),
+      {
+        status: 403,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "Vary": "Origin",
+        },
+      },
+    );
+  }
+
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": origin,
+    "Vary": "Origin",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+
+  function jsonResponse(data: unknown, status = 200) {
+    return new Response(JSON.stringify(data), {
+      status,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: corsHeaders,
@@ -62,8 +80,7 @@ Deno.serve(async (req: Request) => {
     // 1. AUTHENTICATE THE USER
     // ======================================================
 
-    const authorization =
-      req.headers.get("Authorization");
+    const authorization = req.headers.get("Authorization");
 
     if (!authorization?.startsWith("Bearer ")) {
       return jsonResponse(
@@ -120,8 +137,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(
         {
           success: false,
-          error:
-            "An active member account is required.",
+          error: "An active member account is required.",
         },
         403,
       );
@@ -159,8 +175,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { order_reference } =
-      body as Record<string, unknown>;
+    const { order_reference } = body as Record<string, unknown>;
 
     const orderPattern =
       /^GC-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -240,8 +255,7 @@ Deno.serve(async (req: Request) => {
       isNonEmptyString(payment.hmac_signature) &&
       /^[0-9a-f]{64}$/i.test(payment.hmac_signature);
 
-    const validAmount =
-      Number.isFinite(Number(payment.amount)) &&
+    const validAmount = Number.isFinite(Number(payment.amount)) &&
       Number(payment.amount) > 0 &&
       payment.currency === "PHP";
 
@@ -266,11 +280,9 @@ Deno.serve(async (req: Request) => {
         ...baseResponse,
         status,
         verified: false,
-        gateway_payment_verified:
-          gatewayPaymentVerified,
+        gateway_payment_verified: gatewayPaymentVerified,
         registered: false,
-        reconciliation_required:
-          reconciliationRequired,
+        reconciliation_required: reconciliationRequired,
         message,
         receipt: null,
       });
@@ -288,12 +300,10 @@ Deno.serve(async (req: Request) => {
         ...baseResponse,
         status: "REVIEW_REQUIRED",
         verified: false,
-        gateway_payment_verified:
-          hasSuccessfulGatewayEvidence,
+        gateway_payment_verified: hasSuccessfulGatewayEvidence,
         registered: false,
         reconciliation_required: true,
-        reconciliation_requested_at:
-          payment.reconciliation_requested_at,
+        reconciliation_requested_at: payment.reconciliation_requested_at,
         message: hasSuccessfulGatewayEvidence
           ? "Your gateway payment has been recorded, but your registration requires further verification. Do not start another payment."
           : "Your checkout requires verification. Do not start another payment until the existing transaction is resolved.",
@@ -321,8 +331,7 @@ Deno.serve(async (req: Request) => {
     // 8. CHECK FULLY FINALIZED PAYMENT
     // ======================================================
 
-    const isVerifiedPaid =
-      payment.transaction_status === "PAID" &&
+    const isVerifiedPaid = payment.transaction_status === "PAID" &&
       hasSuccessfulGatewayEvidence &&
       isNonEmptyString(payment.registration_id) &&
       isValidDate(payment.confirmed_at) &&
@@ -412,39 +421,28 @@ Deno.serve(async (req: Request) => {
         gateway_payment_verified: true,
         registered: true,
         reconciliation_required: false,
-        message:
-          "Sandbox payment successful. Your registration is confirmed.",
+        message: "Sandbox payment successful. Your registration is confirmed.",
 
         receipt: {
-          transaction_id:
-            payment.transaction_id,
+          transaction_id: payment.transaction_id,
 
-          order_reference:
-            payment.order_reference_id,
+          order_reference: payment.order_reference_id,
 
-          transaction_reference:
-            payment.hitpay_reference_id,
+          transaction_reference: payment.hitpay_reference_id,
 
-          registration_id:
-            payment.registration_id,
+          registration_id: payment.registration_id,
 
-          session_id:
-            payment.session_id,
+          session_id: payment.session_id,
 
-          session_title:
-            session.title,
+          session_title: session.title,
 
-          payment_method:
-            payment.payment_channel,
+          payment_method: payment.payment_channel,
 
-          amount:
-            payment.amount,
+          amount: payment.amount,
 
-          currency:
-            payment.currency,
+          currency: payment.currency,
 
-          payment_date:
-            payment.confirmed_at,
+          payment_date: payment.confirmed_at,
 
           payment_status: "PAID",
 
@@ -525,13 +523,10 @@ Deno.serve(async (req: Request) => {
           true,
         );
     }
-
   } catch (error) {
     console.error(
       "Payment status error:",
-      error instanceof Error
-        ? error.message
-        : "Unknown error",
+      error instanceof Error ? error.message : "Unknown error",
     );
 
     return jsonResponse(
