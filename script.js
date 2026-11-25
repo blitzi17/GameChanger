@@ -1697,10 +1697,7 @@ async function registerForSession(sessionId, btn) {
   // HITPAY_SANDBOX_REGISTRATION_ROUTE
   // Sandbox sessions must not use legacy registration.
 
-  const sandboxSessionId =
-    'cd2f1fa3-c011-481f-b8fa-333354d14e27';
-
-  if (sessionId === sandboxSessionId) {
+  if (isProtectedHitPaySession(sessionId)) {
 
     if (typeof GameChangerPaymentUI === 'undefined') {
 
@@ -1785,7 +1782,7 @@ function openSessionView(sessionId) {
     note.style.display = Number(s.fee) > 0 ? 'block' : 'none'; note.style.background = 'var(--yellow-l)'; note.style.color = '#B45309';
     note.textContent = `This session has a ${fmtMoney(s.fee)} admission fee. Your seat and Zoom link are confirmed once payment is received.`;
     const isHitPaySandbox =
-      s.session_id === 'cd2f1fa3-c011-481f-b8fa-333354d14e27';
+      isProtectedHitPaySession(s.session_id);
 
     if (isHitPaySandbox) {
 
@@ -1805,7 +1802,7 @@ function openSessionView(sessionId) {
 async function registerFromView(sessionId) {
 
   if (
-    sessionId === 'cd2f1fa3-c011-481f-b8fa-333354d14e27'
+    isProtectedHitPaySession(sessionId)
   ) {
 
     if (typeof GameChangerPaymentUI === 'undefined') {
@@ -2847,13 +2844,16 @@ function filteredPayments() {
 
 // HITPAY_LEGACY_PAYMENT_PROTECTION_V1
 
-const HITPAY_PROTECTED_SESSION_ID =
-  'cd2f1fa3-c011-481f-b8fa-333354d14e27';
+const HITPAY_PROTECTED_SESSION_IDS = Object.freeze([
+  'cd2f1fa3-c011-481f-b8fa-333354d14e27',
+  '5e1f26ba-4d7a-4124-96cc-c04284e2e558'
+]);
 
 function isProtectedHitPaySession(sessionId) {
   return typeof sessionId === 'string' &&
-    sessionId.toLowerCase() ===
-      HITPAY_PROTECTED_SESSION_ID;
+    HITPAY_PROTECTED_SESSION_IDS.includes(
+      sessionId.toLowerCase()
+    );
 }
 
 function isProtectedHitPayPayment(payment) {
@@ -3484,7 +3484,7 @@ function openSubmitPayment(sessionId) {
   // Sandbox sessions cannot use manual payment references.
 
   if (
-    sessionId === 'cd2f1fa3-c011-481f-b8fa-333354d14e27'
+    isProtectedHitPaySession(sessionId)
   ) {
 
     showToast(

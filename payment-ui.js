@@ -17,8 +17,10 @@ const GameChangerPaymentUI = (() => {
 
     const CONFIG = Object.freeze({
 
-        sandboxSessionId:
+        sandboxSessionIds: Object.freeze([
             'cd2f1fa3-c011-481f-b8fa-333354d14e27',
+            '5e1f26ba-4d7a-4124-96cc-c04284e2e558'
+        ]),
 
         get checkoutEnabled() {
             return GameChangerPayment.CONFIG.checkoutEnabled === true;
@@ -329,7 +331,10 @@ const GameChangerPaymentUI = (() => {
 
     function isSandboxSession(sessionId) {
 
-        return sessionId === CONFIG.sandboxSessionId;
+        return typeof sessionId === 'string' &&
+            CONFIG.sandboxSessionIds.includes(
+                sessionId.toLowerCase()
+            );
 
     }
 

@@ -278,8 +278,8 @@ export async function createHitPayCheckout(input: {
 
   const body = new URLSearchParams();
 
-  // Sandbox-supported payment method.
-  body.append("payment_methods[]", "card");
+  // Let HitPay select the payment methods available
+  // for the configured Sandbox merchant account.
 
 
   body.set(
@@ -364,9 +364,34 @@ export async function createHitPayCheckout(input: {
 
   if (!response.ok) {
 
+    const details = await response.json().catch(() => null);
+
+    const allowedFields = [
+      "amount",
+      "currency",
+      "payment_methods",
+      "payment_methods.0",
+      "reference_number",
+      "purpose",
+      "redirect_url",
+      "allow_repeated_payments",
+    ];
+
+    const errors = details?.errors;
+
+    const validationFields =
+      errors && typeof errors === "object"
+        ? Object.keys(errors).filter(
+            (field) => allowedFields.includes(field)
+          )
+        : [];
+
     console.error(
-      "HitPay request status:",
-      response.status
+      "HitPay gateway rejection:",
+      JSON.stringify({
+        status: response.status,
+        validationFields,
+      })
     );
 
     throw new Error(
