@@ -3,6 +3,7 @@ import { createAdminClient, createMemberClient } from "../_shared/supabase.ts";
 import {
   assertHitPayCheckoutReady,
   createHitPayCheckout,
+  HitPayGatewayEvidenceError,
 } from "../_shared/hitpay.ts";
 
 const APP_URL = "https://game-changer-sigma.vercel.app";
@@ -438,6 +439,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    let gatewayRequestId: string | null = null;
+
     try {
       // 16. Prepare trusted return URL.
       const redirectUrl = new URL(origin);
@@ -460,6 +463,8 @@ Deno.serve(async (req: Request) => {
         sessionTitle: eligibility.session_title,
         redirectUrl: redirectUrl.toString(),
       });
+
+      gatewayRequestId = checkout.gatewayRequestId;
 
       // 18. Save checkout using the protected RPC.
       const {
@@ -494,22 +499,52 @@ Deno.serve(async (req: Request) => {
         checkout_url: checkout.checkoutUrl,
       });
     } catch (checkoutError) {
-      // 20. Record uncertain checkout outcomes.
-      const {
-        data: reviewSaved,
-        error: reviewError,
-      } = await admin.rpc(
-        "hitpay_checkout_review",
-        {
-          p_transaction_id: transaction.transaction_id,
-          p_user_id: user.id,
-        },
-      );
+      // 20. Preserve gateway evidence when available.
+      if (checkoutError instanceof HitPayGatewayEvidenceError) {
+        gatewayRequestId = checkoutError.gatewayRequestId;
+      }
 
-      if (
-        reviewError ||
-        reviewSaved !== true
-      ) {
+      let reviewSaved = false;
+
+      if (gatewayRequestId !== null) {
+        try {
+          const { data, error } = await admin.rpc(
+            "hitpay_preserve_gateway_evidence",
+            {
+              p_transaction_id: transaction.transaction_id,
+              p_user_id: user.id,
+              p_gateway_request_id: gatewayRequestId,
+            },
+          );
+
+          reviewSaved = !error && data === true;
+
+          if (!reviewSaved) {
+            console.error("Gateway evidence preservation failed.");
+          }
+        } catch {
+          console.error("Gateway evidence RPC unavailable.");
+        }
+      }
+
+      // Fall back to the existing review protection.
+      if (!reviewSaved) {
+        try {
+          const { data, error } = await admin.rpc(
+            "hitpay_checkout_review",
+            {
+              p_transaction_id: transaction.transaction_id,
+              p_user_id: user.id,
+            },
+          );
+
+          reviewSaved = !error && data === true;
+        } catch {
+          console.error("Checkout review RPC unavailable.");
+        }
+      }
+
+      if (!reviewSaved) {
         console.error(
           "Unable to confirm checkout review state:",
           transaction.transaction_id,

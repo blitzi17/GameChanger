@@ -173,7 +173,7 @@ export function validateHitPayCheckoutURL(
 // Backend checkout remains disabled independently
 // of the frontend readiness configuration.
 
-const CHECKOUT_SERVICE_ENABLED: boolean = true;
+const CHECKOUT_SERVICE_ENABLED: boolean = false;
 
 
 export function assertHitPayCheckoutReady(): void {
@@ -217,6 +217,16 @@ export function assertHitPayCheckoutReady(): void {
 // ============================================================
 // 5. CREATE HOSTED CHECKOUT
 // ============================================================
+
+
+export class HitPayGatewayEvidenceError extends Error {
+  constructor(
+    public readonly gatewayRequestId: string,
+  ) {
+    super("Gateway checkout URL requires verification.");
+    this.name = "HitPayGatewayEvidenceError";
+  }
+}
 
 export async function createHitPayCheckout(input: {
 
@@ -413,8 +423,7 @@ export async function createHitPayCheckout(input: {
     typeof data !== "object" ||
     data === null ||
     Array.isArray(data) ||
-    typeof data.id !== "string" ||
-    typeof data.url !== "string"
+    typeof data.id !== "string"
   ) {
 
     throw new Error(
@@ -429,7 +438,9 @@ export async function createHitPayCheckout(input: {
   // 5.7 VALIDATE GATEWAY REQUEST ID
   // ==========================================================
 
-  if (data.id.trim() === "") {
+  if (
+    !/^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/.test(data.id)
+  ) {
 
     throw new Error(
       "Invalid gateway request ID."
@@ -443,8 +454,45 @@ export async function createHitPayCheckout(input: {
   // 5.8 VALIDATE HOSTED CHECKOUT URL
   // ==========================================================
 
-  const checkoutUrl =
-    validateHitPayCheckoutURL(data.url);
+  if (
+    data.reference_number !== input.orderReference ||
+    String(data.currency).toUpperCase() !== input.currency ||
+    !["string", "number"].includes(typeof data.amount) ||
+    String(data.amount).trim() === "" ||
+    !Number.isFinite(Number(data.amount)) ||
+    Number(data.amount) !== Number(input.amount.toFixed(2))
+  ) {
+    throw new Error("Gateway response correlation failed.");
+  }
+
+  let checkoutUrl: string;
+
+  try {
+    checkoutUrl = validateHitPayCheckoutURL(data.url);
+  } catch {
+    let hostname = "unavailable";
+
+    try {
+      if (typeof data.url === "string") {
+        const parsed = new URL(data.url);
+
+        if (
+          /^[a-zA-Z0-9.-]{1,253}$/.test(parsed.hostname)
+        ) {
+          hostname = parsed.hostname;
+        }
+      }
+    } catch {
+      // Never log the raw checkout URL.
+    }
+
+    console.error(
+      "Rejected HitPay checkout hostname:",
+      hostname,
+    );
+
+    throw new HitPayGatewayEvidenceError(data.id);
+  }
 
 
 

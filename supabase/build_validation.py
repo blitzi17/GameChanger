@@ -24,6 +24,7 @@ SQL_FILES = [
     "hitpay_admin_records.sql",
     "hitpay_join_protection.sql",
     "hitpay_audit_records.sql",
+    "hitpay_gateway_evidence.sql",
 ]
 
 
@@ -37,9 +38,9 @@ TRANSACTION_PATTERN = re.compile(
 
 
 # Validate migration list.
-if len(SQL_FILES) != 17:
+if len(SQL_FILES) != 18:
     raise ValueError(
-        "Expected exactly 17 migration files."
+        "Expected exactly 18 migration files."
     )
 
 
