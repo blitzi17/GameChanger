@@ -24,7 +24,10 @@ const SANDBOX_URL = "https://api.sandbox.hit-pay.com";
 // has been independently confirmed.
 
 const APPROVED_CHECKOUT_HOSTNAMES:
-  readonly string[] = Object.freeze(["securecheckout.sandbox.hit-pay.com"]);
+  readonly string[] = Object.freeze([
+    "securecheckout.sandbox.hit-pay.com",
+    "checkout.sandbox.hit-pay.com"
+]);
 
 
 

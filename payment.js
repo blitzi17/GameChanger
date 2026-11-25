@@ -37,7 +37,10 @@ const GameChangerPayment = (() => {
         // HITPAY_CHECKOUT_URL_PROTECTION_V1
         // Populate only after the exact sandbox checkout
         // hostname has been independently confirmed.
-        approvedCheckoutHostnames: Object.freeze(["securecheckout.sandbox.hit-pay.com"]),
+        approvedCheckoutHostnames: Object.freeze([
+    "securecheckout.sandbox.hit-pay.com",
+    "checkout.sandbox.hit-pay.com"
+]),
         requestTimeout: 30000
     });
 
