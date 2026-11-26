@@ -20,7 +20,8 @@ const GameChangerPaymentUI = (() => {
         sandboxSessionIds: Object.freeze([
             'cd2f1fa3-c011-481f-b8fa-333354d14e27',
             '5e1f26ba-4d7a-4124-96cc-c04284e2e558',
-            '4d22ecec-d0b2-4ff6-9c61-e111b12c59a7'
+            '4d22ecec-d0b2-4ff6-9c61-e111b12c59a7',
+            'a0bc1778-df21-45d0-87d1-8cc9f47a17f3'
         ]),
 
         get checkoutEnabled() {
