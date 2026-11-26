@@ -1919,7 +1919,7 @@ function openSessionView(sessionId) {
   const left = Number(s.capacity || 0) - Number(s.registered_count || 0);
   const full = !s.is_registered && Number(s.capacity) > 0 && left <= 0;
   setText('msv-title', s.title);
-  setHtml('msv-badges', `<span class="badge ${a.badge}">${esc(a.short)}</span>${s.type ? `<span class="badge bg-gr">${esc(s.type)}</span>` : ''}${sessionIsLive(s) ? '<span class="badge bg-r">🔴 Live now</span>' : ''}${s.is_registered ? '<span class="badge bg-g">✓ Registered</span>' : ''}`);
+  setHtml('msv-badges', `<span class="badge ${a.badge}">${esc(a.short)}</span>${s.type ? `<span class="badge bg-gr">${esc(s.type)}</span>` : ''}${sessionIsLive(s) ? '<span class="badge bg-r">🔴 Live now</span>' : ''}${s.is_registered ? '<span class="badge bg-g">✓ Registered</span>' : ''}${s.is_registered && isProtectedHitPaySession(s.session_id) && s.payment_status === 'PAID' ? '<span class="badge bg-g">✓ Paid</span><span class="badge bg-y">HitPay Sandbox</span>' : ''}`);
   const row = (k, v) => `<div><div class="mf-lbl">${k}</div><div style="font-size:13px;font-weight:600;">${v}</div></div>`;
   setHtml('msv-details', [
     row('📅 Date', fmtDateLong(s.start)),
@@ -1943,6 +1943,61 @@ function openSessionView(sessionId) {
     note.textContent =
       'HitPay Sandbox registration requires verified ' +
       'payment confirmation. Manual payment is unavailable.';
+  // HITPAY_PAID_SESSION_VIEW_V1
+  } else if (
+    s.is_registered &&
+    isProtectedHitPaySession(s.session_id) &&
+    s.payment_status === 'PAID'
+  ) {
+    note.style.display = 'block';
+    note.style.background = 'var(--green-l)';
+    note.style.color = 'var(--green)';
+
+    const paymentMessage =
+      'Sandbox payment confirmed. Your registration is complete. ' +
+      'No additional payment is required. ';
+
+    const start = new Date(s.start).getTime();
+    const end = new Date(s.end).getTime();
+    const now = Date.now();
+
+    let accessMessage;
+
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      end <= start
+    ) {
+      accessMessage = 'Session schedule is unavailable.';
+    } else if (now >= end) {
+      accessMessage = 'This session has ended.';
+    } else if (!zoomReady(s)) {
+      accessMessage =
+        'The Zoom link is not available yet. ' +
+        'Joining opens 15 minutes before the scheduled start, ' +
+        'once the link is ready.';
+    } else if (now < start - 15 * 60 * 1000) {
+      accessMessage =
+        'Joining opens 15 minutes before the scheduled start.';
+    } else {
+      accessMessage =
+        'Open Join Options to access the session.';
+    }
+
+    note.textContent = paymentMessage + accessMessage;
+
+    if (
+      Number.isFinite(start) &&
+      Number.isFinite(end) &&
+      end > start &&
+      now < end
+    ) {
+      footer += `<button class="btn btn-primary"
+        onclick="closeMo('m-session-view');openJoinModal('${esc(s.session_id)}')">
+        🎯 Join Options
+      </button>`;
+    }
+
   } else if (s.is_registered) {
     note.style.display = 'block'; note.style.background = 'var(--green-l)'; note.style.color = 'var(--green)';
     note.textContent = zoomReady(s) ? "You're registered. The Join button opens 15 minutes before the session starts."
