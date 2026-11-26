@@ -1659,11 +1659,7 @@ function renderRegisteredUpcomingSessions(filterFn) {
             </span>
           </div>
 
-          ${sandbox
-            ? `<div style="font-size:11px;color:#B45309;font-weight:600;margin-bottom:8px;">
-                 HitPay Sandbox · Test only
-               </div>`
-            : ''}
+
 
           <div style="background:var(--bg);border-radius:var(--r2);padding:9px;font-size:11px;color:var(--t2);margin-bottom:10px;">
             ${accessNote}
@@ -1919,7 +1915,7 @@ function openSessionView(sessionId) {
   const left = Number(s.capacity || 0) - Number(s.registered_count || 0);
   const full = !s.is_registered && Number(s.capacity) > 0 && left <= 0;
   setText('msv-title', s.title);
-  setHtml('msv-badges', `<span class="badge ${a.badge}">${esc(a.short)}</span>${s.type ? `<span class="badge bg-gr">${esc(s.type)}</span>` : ''}${sessionIsLive(s) ? '<span class="badge bg-r">🔴 Live now</span>' : ''}${s.is_registered ? '<span class="badge bg-g">✓ Registered</span>' : ''}${s.is_registered && isProtectedHitPaySession(s.session_id) && s.payment_status === 'PAID' ? '<span class="badge bg-g">✓ Paid</span><span class="badge bg-y">HitPay Sandbox</span>' : ''}`);
+  setHtml('msv-badges', `<span class="badge ${a.badge}">${esc(a.short)}</span>${s.type ? `<span class="badge bg-gr">${esc(s.type)}</span>` : ''}${sessionIsLive(s) ? '<span class="badge bg-r">🔴 Live now</span>' : ''}${s.is_registered ? '<span class="badge bg-g">✓ Registered</span>' : ''}${s.is_registered && isProtectedHitPaySession(s.session_id) && s.payment_status === 'PAID' ? '<span class="badge bg-g">✓ Paid</span>' : ''}`);
   const row = (k, v) => `<div><div class="mf-lbl">${k}</div><div style="font-size:13px;font-weight:600;">${v}</div></div>`;
   setHtml('msv-details', [
     row('📅 Date', fmtDateLong(s.start)),
@@ -1941,8 +1937,16 @@ function openSessionView(sessionId) {
     note.style.background = 'var(--yellow-l)';
     note.style.color = '#B45309';
     note.textContent =
-      'HitPay Sandbox registration requires verified ' +
-      'payment confirmation. Manual payment is unavailable.';
+      'Complete your admission payment through HitPay. ' +
+      'Your registration will be confirmed automatically ' +
+      'after successful payment verification.';
+
+    if (['UNPAID', 'PENDING_PAYMENT'].includes(s.payment_status)) {
+      footer += `<button class="btn btn-primary"
+        onclick="registerFromView('${esc(s.session_id)}')">
+        💳 Pay Now
+      </button>`;
+    }
   // HITPAY_PAID_SESSION_VIEW_V1
   } else if (
     s.is_registered &&
@@ -1954,7 +1958,7 @@ function openSessionView(sessionId) {
     note.style.color = 'var(--green)';
 
     const paymentMessage =
-      'Sandbox payment confirmed. Your registration is complete. ' +
+      'Payment confirmed. Your registration is complete. ' +
       'No additional payment is required. ';
 
     const start = new Date(s.start).getTime();
@@ -2079,7 +2083,14 @@ function openJoinModal(sessionId) {
   else if (
     isProtectedHitPaySession(s.session_id) &&
     s.payment_status !== 'PAID'
-  ) footer = `<span class="badge bg-y">HitPay payment verification required</span>`;
+  ) {
+    footer = ['UNPAID', 'PENDING_PAYMENT'].includes(s.payment_status)
+      ? `<button class="btn btn-primary"
+          onclick="closeMo('m-join-modal');openSessionView('${esc(s.session_id)}')">
+          💳 Complete Payment
+        </button>`
+      : `<span class="badge bg-y">Payment verification required</span>`;
+  }
   else if (!zoomReady(s) && s.payment_status === 'PENDING_PAYMENT') footer = `<span class="badge bg-y">⏳ Payment sent — waiting for confirmation</span>`;
   else if (!isProtectedHitPaySession(s.session_id) && !zoomReady(s) && Number(s.fee) > 0) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment to unlock Zoom</button>`;
   else if (!zoomReady(s)) footer = `<span class="badge bg-y">⏳ The Zoom link isn't ready yet</span>`;
@@ -3024,7 +3035,6 @@ function adminPaymentStatusBadge(p) {
 
 function adminPaymentIsSandbox(p) {
   return p.is_sandbox === true ||
-    isProtectedHitPaySession(p.session_id) ||
     String(p.payment_provider || '').toUpperCase() === 'HITPAY';
 }
 
@@ -3074,19 +3084,31 @@ function filteredPayments() {
 
 // HITPAY_LEGACY_PAYMENT_PROTECTION_V1
 
-const HITPAY_PROTECTED_SESSION_IDS = Object.freeze([
-  'cd2f1fa3-c011-481f-b8fa-333354d14e27',
-  '5e1f26ba-4d7a-4124-96cc-c04284e2e558',
-  '4d22ecec-d0b2-4ff6-9c61-e111b12c59a7',
-  'a0bc1778-df21-45d0-87d1-8cc9f47a17f3'
-]);
+// DYNAMIC_HITPAY_SESSION_ROUTING_V1
 
 function isProtectedHitPaySession(sessionId) {
-  return typeof sessionId === 'string' &&
-    HITPAY_PROTECTED_SESSION_IDS.includes(
-      sessionId.toLowerCase()
-    );
+  if (typeof sessionId !== 'string') return false;
+
+  const sessions = currentRole === 'member'
+    ? [
+        ...(md().upcoming || []),
+        ...(mp().registrations || [])
+      ]
+    : currentRole === 'admin'
+      ? (ad().sessions || [])
+      : [];
+
+  const session = sessions.find(
+    s => s.session_id === sessionId
+  );
+
+  const fee = Number(session?.fee);
+
+  return !!session &&
+    Number.isFinite(fee) &&
+    fee > 0;
 }
+
 
 function isProtectedHitPayPayment(payment) {
   if (!payment || typeof payment !== 'object') {
@@ -3799,7 +3821,7 @@ function isMemberHitPayTransaction(payment) {
 function isMemberSandboxPayment(payment) {
   return !!payment && (
     payment.is_sandbox === true ||
-    isProtectedHitPaySession(payment.session_id)
+    isMemberHitPayTransaction(payment)
   );
 }
 
@@ -3970,7 +3992,6 @@ function canCheckMemberHitPayPayment(payment) {
     !!payment &&
     isMemberHitPayTransaction(payment) &&
     payment.is_sandbox === true &&
-    isProtectedHitPaySession(payment.session_id) &&
     isMemberPaymentTransactionId(
       payment.transaction_id
     ) &&
@@ -4255,21 +4276,34 @@ function renderMemberPayments() {
 
   setHtml('mpay-dues', dues.length ? dues.map(r => {
 
-    if (isProtectedHitPaySession(r.session_id)) {
+    if (Number(r.fee) > 0) {
+      const session = (md().upcoming || []).find(
+        s => s.session_id === r.session_id
+      );
+
+      const canPay = !!session &&
+        ['Upcoming', 'Live'].includes(r.session_status) &&
+        Number.isFinite(Date.parse(session.end)) &&
+        Date.parse(session.end) > Date.now();
+
       return `<div class="m-hitem">
         <div class="m-hst">₱</div>
         <div class="m-hi">
-          <h4>${esc(r.session || 'Sandbox session')}</h4>
+          <h4>${esc(r.session || 'Training session')}</h4>
           <p>${fmtMoney(r.fee)}</p>
           <div style="font-size:12px;color:var(--t3);">
-            HitPay Sandbox — gateway verification required.
-            Manual reference submission is unavailable.
+            ${canPay
+              ? 'Complete your admission payment through HitPay. Registration is confirmed after payment verification.'
+              : 'Payment is currently unavailable for this session.'}
           </div>
         </div>
         <div class="m-ha">
-          <span class="badge bg-y">
-            Verification required
-          </span>
+          ${canPay
+            ? `<button class="btn btn-primary btn-xs"
+                onclick="openSessionView('${esc(r.session_id)}')">
+                💳 Pay Now
+              </button>`
+            : '<span class="badge bg-y">Unavailable</span>'}
         </div>
       </div>`;
     }
@@ -4279,7 +4313,7 @@ function renderMemberPayments() {
       : r.rejected_reason ? `<div style="font-size:12px;color:var(--red);margin-top:3px;">✗ Your last payment was not accepted: ${esc(r.rejected_reason)} — please submit it again.</div>` : '';
     const btn = memberPayments?.fallback ? '' : `<button class="btn btn-xs ${pending ? 'btn-ghost' : 'btn-primary'}" onclick="openSubmitPayment('${esc(r.session_id)}')">${pending ? 'Edit' : 'Submit payment'}</button>`;
     return `<div class="m-hitem"><div class="m-hst" style="background:var(--yellow-l);color:#B45309;">₱</div><div class="m-hi"><h4>${esc(r.session)}</h4><p>${fmtDate(r.start)} · ${fmtTime(r.start)} · ${fmtMoney(r.fee)}</p>${note}</div><div class="m-ha" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;"><span class="badge ${pending ? 'bg-y' : 'bg-r'}">${pending ? '⏳ Waiting for confirmation' : 'Unpaid'}</span>${btn}</div></div>`;
-  }).join('') + `<div style="font-size:12px;color:var(--t3);margin-top:10px;line-height:1.6;">For ordinary sessions using manual payments, submit your existing payment reference for administrator review. HitPay Sandbox payments follow a separate gateway verification process.</div>`
+  }).join('') + `<div style="font-size:12px;color:var(--t3);margin-top:10px;line-height:1.6;">Complete admission payments through HitPay. Your registration and receipt are confirmed automatically after successful payment verification.</div>`
     : emptyState('✅', loaded ? 'Nothing to pay right now.' : 'Loading…'));
 
   const st =

@@ -17,12 +17,6 @@ const GameChangerPaymentUI = (() => {
 
     const CONFIG = Object.freeze({
 
-        sandboxSessionIds: Object.freeze([
-            'cd2f1fa3-c011-481f-b8fa-333354d14e27',
-            '5e1f26ba-4d7a-4124-96cc-c04284e2e558',
-            '4d22ecec-d0b2-4ff6-9c61-e111b12c59a7',
-            'a0bc1778-df21-45d0-87d1-8cc9f47a17f3'
-        ]),
 
         get checkoutEnabled() {
             return GameChangerPayment.CONFIG.checkoutEnabled === true;
@@ -333,10 +327,25 @@ const GameChangerPaymentUI = (() => {
 
     function isSandboxSession(sessionId) {
 
-        return typeof sessionId === 'string' &&
-            CONFIG.sandboxSessionIds.includes(
-                sessionId.toLowerCase()
-            );
+        const session = getSession(sessionId);
+        const fee = Number(session?.fee);
+
+        return !!session &&
+            Number.isFinite(fee) &&
+            fee > 0;
+
+    }
+
+    function canPayForSession(session) {
+
+        if (!session) return false;
+
+        if (!session.is_registered) return true;
+
+        return [
+            'UNPAID',
+            'PENDING_PAYMENT'
+        ].includes(session.payment_status);
 
     }
 
@@ -425,10 +434,10 @@ const GameChangerPaymentUI = (() => {
 
         }
 
-        if (session.is_registered) {
+        if (!canPayForSession(session)) {
 
             showToast(
-                'You already have a registration for this session.',
+                'This registration is not eligible for another payment.',
                 'info'
             );
 
@@ -687,7 +696,7 @@ const GameChangerPaymentUI = (() => {
         if (
             !isSandboxSession(sessionId) ||
             !session ||
-            session.is_registered
+            !canPayForSession(session)
         ) {
 
             showCheckoutMessage(
