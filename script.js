@@ -412,7 +412,8 @@ function invalidateMemberPaymentState() {
   for (const id of [
     'mpay-paid',
     'mpay-due',
-    'mpay-count'
+    'mpay-count',
+    'm-registered-count'
   ]) {
     const element = document.getElementById(id);
 
@@ -428,7 +429,8 @@ function invalidateMemberPaymentState() {
 
   for (const id of [
     'mpay-dues',
-    'mpay-tbody'
+    'mpay-tbody',
+    'm-registered-sessions'
   ]) {
     const element = document.getElementById(id);
 
@@ -1511,6 +1513,172 @@ function memberSessionFilter() {
     return true;
   };
 }
+// REGISTERED_UPCOMING_SESSIONS_V1
+
+function renderRegisteredUpcomingSessions(filterFn) {
+  const container = document.getElementById(
+    'm-registered-sessions'
+  );
+
+  if (!container) return;
+
+  if (
+    currentRole !== 'member' ||
+    !loggedInUser?.uid ||
+    !memberData
+  ) {
+    container.replaceChildren();
+    setText('m-registered-count', '—');
+    return;
+  }
+
+  const now = Date.now();
+
+  const registered = (md().upcoming || [])
+    .filter(s =>
+      s.is_registered === true &&
+      Number.isFinite(new Date(s.start).getTime()) &&
+      Number.isFinite(new Date(s.end).getTime()) &&
+      new Date(s.end).getTime() > now &&
+      s.status !== 'Cancelled' &&
+      s.status !== 'Completed' &&
+      s.status !== 'Draft'
+    )
+    .sort((a, b) =>
+      new Date(a.start) - new Date(b.start)
+    );
+
+  const visible = registered.filter(
+    filterFn || (() => true)
+  );
+
+  setText(
+    'm-registered-count',
+    visible.length === registered.length
+      ? `${registered.length} upcoming`
+      : `${visible.length} of ${registered.length} upcoming`
+  );
+
+  if (!visible.length) {
+    setHtml(
+      'm-registered-sessions',
+      emptyState(
+        '📅',
+        registered.length
+          ? 'No registered sessions match your filters.'
+          : 'You have no registered upcoming sessions yet.'
+      )
+    );
+    return;
+  }
+
+  const statusLabels = {
+    PAID: ['bg-g', 'Paid'],
+    FREE: ['bg-g', 'Free'],
+    WAIVED: ['bg-g', 'Waived'],
+    PENDING_PAYMENT: ['bg-y', 'Payment pending'],
+    UNPAID: ['bg-r', 'Unpaid']
+  };
+
+  setHtml(
+    'm-registered-sessions',
+    visible.map(s => {
+      const a = areaStyle(s.area);
+      const sandbox = isProtectedHitPaySession(
+        s.session_id
+      );
+
+      const status = statusLabels[s.payment_status] ||
+        ['bg-gr', 'Payment status unavailable'];
+
+      const paymentEligible = sandbox
+        ? s.payment_status === 'PAID'
+        : ['PAID', 'FREE', 'WAIVED'].includes(
+            s.payment_status
+          );
+
+      const start = new Date(s.start).getTime();
+      const opens = start - 15 * 60 * 1000;
+
+      let accessNote;
+
+      if (!paymentEligible) {
+        accessNote = 'Payment confirmation required';
+      } else if (now < opens) {
+        accessNote = '🔒 Join opens 15 min before start';
+      } else if (!zoomReady(s)) {
+        accessNote = 'Zoom link is not available yet';
+      } else {
+        accessNote = 'Session joining options available';
+      }
+
+      const safeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        .test(String(s.session_id));
+
+      const actions = safeId
+        ? `
+          <button class="btn btn-outline btn-sm"
+                  onclick="openSessionView('${esc(s.session_id)}')">
+            View Session
+          </button>
+          ${paymentEligible
+            ? `<button class="btn btn-ghost btn-sm"
+                       onclick="openJoinModal('${esc(s.session_id)}')">
+                 Join Options
+               </button>`
+            : ''}
+        `
+        : '';
+
+      return `
+        <div class="rec-card"
+             style="min-width:0;cursor:default;">
+
+          <div class="rat"
+               style="background:${a.light};color:${a.color};">
+            ${esc(a.short)}
+          </div>
+
+          <div class="rtitle" style="margin-top:8px;">
+            ${esc(s.title)}
+          </div>
+
+          <div style="font-size:12px;color:var(--t2);margin-bottom:8px;">
+            📅 ${fmtDate(s.start)} · ${fmtTime(s.start)}
+          </div>
+
+          <div style="font-size:11px;color:var(--t3);margin-bottom:9px;">
+            ${esc(s.duration)} min ·
+            ${Number(s.fee) > 0 ? fmtMoney(s.fee) : 'Free'}
+          </div>
+
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;">
+            <span class="badge bg-g">✓ Registered</span>
+            <span class="badge ${status[0]}">
+              ${status[1]}
+            </span>
+          </div>
+
+          ${sandbox
+            ? `<div style="font-size:11px;color:#B45309;font-weight:600;margin-bottom:8px;">
+                 HitPay Sandbox · Test only
+               </div>`
+            : ''}
+
+          <div style="background:var(--bg);border-radius:var(--r2);padding:9px;font-size:11px;color:var(--t2);margin-bottom:10px;">
+            ${accessNote}
+          </div>
+
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${actions}
+          </div>
+
+        </div>
+      `;
+    }).join('')
+  );
+}
+
 function renderMemberAttendance() {
   const next = memberNextSession();
   if (next) {
@@ -1530,6 +1698,9 @@ function renderMemberAttendance() {
     setHtml('m-att-next', emptyState('📅', 'No upcoming sessions yet.'));
   }
   const filter = memberSessionFilter();
+
+  renderRegisteredUpcomingSessions(filter);
+
   setHtml('m-att-recs', renderRecCards(recommendedSessions(10, filter), 'No open sessions match your filters.'));
 
   const hist = (md().history || []).filter(filter);
