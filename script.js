@@ -105,6 +105,10 @@ function isAdminId(val) {
 }
 
 function detectCredential(val) {
+  // Login credential detection must not change
+  // the role of an authenticated user.
+  if (loggedInUser) return;
+
   const credInput = document.getElementById('l-cred');
   const hintBox   = document.getElementById('cred-hint-box');
   const credLabel = document.getElementById('cred-label');
