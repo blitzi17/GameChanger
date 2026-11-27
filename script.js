@@ -105,6 +105,10 @@ function isAdminId(val) {
 }
 
 function detectCredential(val) {
+  // Login credential detection must not change
+  // the role of an authenticated user.
+  if (loggedInUser) return;
+
   const credInput = document.getElementById('l-cred');
   const hintBox   = document.getElementById('cred-hint-box');
   const credLabel = document.getElementById('cred-label');
@@ -315,6 +319,237 @@ function logAdminAction(action, target = null, details = null) {
 }
 
 // loginMode: 'admin' when the user typed an Admin ID, 'member' for email, null for a restored session
+// HITPAY_AUTHENTICATION_LIFECYCLE
+
+let hitPayAuthenticatedUserId = null;
+
+// HITPAY_MEMBER_PAYMENT_ISOLATION_V1
+
+var memberPaymentOwnerId = null;
+var memberPaymentAuthUserId = null;
+var memberPaymentAuthGeneration = 0;
+var memberPaymentLoadGeneration = 0;
+var memberDashboardLoadGeneration = 0;
+var memberPaymentActionGeneration = 0;
+var memberPaymentActiveAction = null;
+
+function currentMemberPaymentIdentity() {
+  if (
+    currentRole !== 'member' ||
+    !loggedInUser?.uid ||
+    memberPaymentAuthUserId !== loggedInUser.uid
+  ) {
+    return null;
+  }
+
+  return loggedInUser.uid;
+}
+
+function captureMemberPaymentContext() {
+  const userId = currentMemberPaymentIdentity();
+
+  if (!userId) return null;
+
+  return {
+    userId,
+    generation: memberPaymentAuthGeneration || 0
+  };
+}
+
+function isCurrentMemberPaymentContext(context) {
+  return !!context &&
+    context.userId === currentMemberPaymentIdentity() &&
+    context.generation ===
+      (memberPaymentAuthGeneration || 0);
+}
+
+async function verifyMemberPaymentContext(context) {
+  if (!isCurrentMemberPaymentContext(context)) {
+    return false;
+  }
+
+  try {
+    const { data, error } = await sb.auth.getSession();
+
+    return !error &&
+      data?.session?.user?.id === context.userId &&
+      isCurrentMemberPaymentContext(context);
+
+  } catch (error) {
+    return false;
+  }
+}
+
+function ownsMemberPaymentCache() {
+  const userId = currentMemberPaymentIdentity();
+
+  return !!userId &&
+    memberPaymentOwnerId === userId &&
+    !!memberPayments;
+}
+
+function invalidateMemberPaymentState() {
+  memberPaymentAuthGeneration =
+    (memberPaymentAuthGeneration || 0) + 1;
+
+  memberPaymentLoadGeneration =
+    (memberPaymentLoadGeneration || 0) + 1;
+
+  memberDashboardLoadGeneration =
+    (memberDashboardLoadGeneration || 0) + 1;
+
+  memberPaymentActionGeneration =
+    (memberPaymentActionGeneration || 0) + 1;
+
+  memberPaymentOwnerId = null;
+  memberPaymentAuthUserId = null;
+  memberPaymentActiveAction = null;
+
+  memberPayments = null;
+  memberData = null;
+  payingSessionId = null;
+
+  for (const id of [
+    'mpay-paid',
+    'mpay-due',
+    'mpay-count',
+    'm-registered-count'
+  ]) {
+    const element = document.getElementById(id);
+
+    if (element) element.textContent = '—';
+  }
+
+  const dueLabel =
+    document.getElementById('mpay-due-lbl');
+
+  if (dueLabel) {
+    dueLabel.textContent = 'Awaiting Payment';
+  }
+
+  for (const id of [
+    'mpay-dues',
+    'mpay-tbody',
+    'm-registered-sessions'
+  ]) {
+    const element = document.getElementById(id);
+
+    if (element) element.textContent = '';
+  }
+
+  const search =
+    document.getElementById('mpay-search');
+
+  if (search) search.value = '';
+
+  const status =
+    document.getElementById('mpay-status');
+
+  if (status) status.value = '';
+
+  const badge =
+    document.getElementById('m-nb-pay');
+
+  if (badge) {
+    badge.textContent = '';
+    badge.style.display = 'none';
+  }
+}
+
+
+
+function clearHitPayInterface(clearReturn = true) {
+  invalidateAdminPaymentState();
+
+  invalidateMemberPaymentState();
+
+
+  try {
+
+    if (typeof GameChangerPaymentUI !== 'undefined') {
+
+      GameChangerPaymentUI.reset();
+
+    }
+
+    if (
+      clearReturn &&
+      typeof GameChangerPaymentReturn !== 'undefined'
+    ) {
+
+      GameChangerPaymentReturn.reset();
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      '[HitPay Sandbox] Interface reset failed.'
+    );
+
+  }
+
+}
+
+function handleHitPayAuthenticatedSession(user) {
+
+  if (!user?.id) return;
+
+  if (
+    hitPayAuthenticatedUserId &&
+    hitPayAuthenticatedUserId !== user.id
+  ) {
+
+    clearHitPayInterface(true);
+
+  }
+
+  hitPayAuthenticatedUserId = user.id;
+
+  if (currentRole !== 'member') {
+
+    clearHitPayInterface(true);
+
+    return;
+
+  }
+
+  // Run after authentication and dashboard initialization.
+  // Never request payment status inside the Supabase
+  // authentication state-change callback.
+
+  setTimeout(() => {
+
+    if (
+      hitPayAuthenticatedUserId !== user.id ||
+      currentRole !== 'member' ||
+      !loggedInUser
+    ) {
+
+      return;
+
+    }
+
+    if (
+      typeof GameChangerPaymentReturn !== 'undefined'
+    ) {
+
+      GameChangerPaymentReturn
+        .handleAuthenticatedReturn()
+        .catch(() => {
+
+          console.error(
+            '[HitPay Sandbox] Return handling failed.'
+          );
+
+        });
+
+    }
+
+  }, 0);
+
+}
+
 async function startSession(user, loginMode) {
   const profile = await loadProfile(user);
   if (profile.status === 'Archived') {
@@ -326,9 +561,44 @@ async function startSession(user, loginMode) {
     await sb.auth.signOut();
     throw new Error('This Admin ID does not belong to an admin account.');
   }
+  const {
+    data: activeAuth,
+    error: activeAuthError
+  } = await sb.auth.getSession();
+
+  if (
+    activeAuthError ||
+    activeAuth?.session?.user?.id !== user.id
+  ) {
+    throw new Error(
+      'Your authenticated session has changed. Please sign in again.'
+    );
+  }
+
+  if (
+    loggedInUser?.uid !== profile.uid ||
+    memberPaymentAuthUserId !== profile.uid ||
+    profile.role !== 'member'
+  ) {
+    invalidateMemberPaymentState();
+  }
+
   loggedInUser = profile;
   currentRole  = profile.role === 'admin' ? 'admin' : 'member';
+
+  // Bind the payment lifecycle before enterApp()
+  // starts asynchronous dashboard requests.
+
+  memberPaymentAuthUserId =
+    currentRole === 'member' ? user.id : null;
+
+  hitPayAuthenticatedUserId = user.id;
+
   enterApp();
+
+  // Process payment returns only after successful login.
+
+  handleHitPayAuthenticatedSession(user);
   // A typed login is always logged. A restored session (page reload) only
   // starts a new row if the user has no recent open sign-in.
   logSignIn(loginMode ? 'password' : 'session_restored');
@@ -453,6 +723,13 @@ function showLoginErrHtml(html) {
 }
 
 function switchToLogin() {
+
+  // Clear payment state before leaving the member account.
+
+  hitPayAuthenticatedUserId = null;
+
+  clearHitPayInterface(true);
+
   const hadUser = !!loggedInUser;
   (async () => {
     if (hadUser) await logSignOut();          // needs the session, so it runs first
@@ -708,9 +985,42 @@ async function handleRegister() {
 // Restores a logged-in session, and handles people arriving
 // from the "confirm email" or "reset password" links.
 // ════════════════════════════════════════════════
-sb.auth.onAuthStateChange((event) => {
+sb.auth.onAuthStateChange((event, session) => {
   // Keep this callback synchronous (Supabase recommendation)
   if (event === 'PASSWORD_RECOVERY') openResetModal();
+
+  if (event === 'SIGNED_OUT') {
+
+    hitPayAuthenticatedUserId = null;
+
+    clearHitPayInterface(true);
+
+  }
+
+  if (
+    session?.user?.id &&
+    (
+      (
+        hitPayAuthenticatedUserId &&
+        session.user.id !== hitPayAuthenticatedUserId
+      ) ||
+      (
+        memberPaymentAuthUserId &&
+        session.user.id !== memberPaymentAuthUserId
+      ) ||
+      (
+        loggedInUser?.uid &&
+        session.user.id !== loggedInUser.uid
+      )
+    )
+  ) {
+
+    hitPayAuthenticatedUserId = null;
+
+    clearHitPayInterface(true);
+
+  }
+
 });
 
 (async function initAuth() {
@@ -898,16 +1208,68 @@ let archiveTargetId = null;
 // MEMBER: load + render
 // ════════════════════════════════════════════════
 async function loadMemberData() {
+  const context = captureMemberPaymentContext();
+
+  if (!context) return false;
+
+  const requestId = ++memberDashboardLoadGeneration;
+
+  const isCurrent = () =>
+    isCurrentMemberPaymentContext(context) &&
+    requestId === memberDashboardLoadGeneration;
+
   lastDataLoad = Date.now();
-  try {
-    memberData = await rpc('member_dashboard');
-  } catch (e) {
-    memberData = null;
-    console.error('[Supabase] member_dashboard failed:', e);
-    showToast('Could not load your dashboard data. ' + friendlyAuthError(e), 'error', 6000);
+
+  if (
+    !await verifyMemberPaymentContext(context) ||
+    !isCurrent()
+  ) {
+    return false;
   }
+
+  try {
+    const result = await rpc('member_dashboard');
+
+    if (
+      !isCurrent() ||
+      !await verifyMemberPaymentContext(context) ||
+      !isCurrent()
+    ) {
+      return false;
+    }
+
+    memberData = result;
+
+  } catch (error) {
+    if (
+      !isCurrent() ||
+      !await verifyMemberPaymentContext(context) ||
+      !isCurrent()
+    ) {
+      return false;
+    }
+
+    memberData = null;
+
+    console.error(
+      '[Supabase] member_dashboard failed.'
+    );
+
+    showToast(
+      'Could not load your dashboard data. ' +
+        friendlyAuthError(error),
+      'error',
+      6000
+    );
+  }
+
+  if (!isCurrent()) return false;
+
   renderMemberAll();
+
+  return true;
 }
+
 function renderMemberAll() {
   renderMemberHome();
   renderSkillTree();
@@ -1151,6 +1513,168 @@ function memberSessionFilter() {
     return true;
   };
 }
+// REGISTERED_UPCOMING_SESSIONS_V1
+
+function renderRegisteredUpcomingSessions(filterFn) {
+  const container = document.getElementById(
+    'm-registered-sessions'
+  );
+
+  if (!container) return;
+
+  if (
+    currentRole !== 'member' ||
+    !loggedInUser?.uid ||
+    !memberData
+  ) {
+    container.replaceChildren();
+    setText('m-registered-count', '—');
+    return;
+  }
+
+  const now = Date.now();
+
+  const registered = (md().upcoming || [])
+    .filter(s =>
+      s.is_registered === true &&
+      Number.isFinite(new Date(s.start).getTime()) &&
+      Number.isFinite(new Date(s.end).getTime()) &&
+      new Date(s.end).getTime() > now &&
+      s.status !== 'Cancelled' &&
+      s.status !== 'Completed' &&
+      s.status !== 'Draft'
+    )
+    .sort((a, b) =>
+      new Date(a.start) - new Date(b.start)
+    );
+
+  const visible = registered.filter(
+    filterFn || (() => true)
+  );
+
+  setText(
+    'm-registered-count',
+    visible.length === registered.length
+      ? `${registered.length} upcoming`
+      : `${visible.length} of ${registered.length} upcoming`
+  );
+
+  if (!visible.length) {
+    setHtml(
+      'm-registered-sessions',
+      emptyState(
+        '📅',
+        registered.length
+          ? 'No registered sessions match your filters.'
+          : 'You have no registered upcoming sessions yet.'
+      )
+    );
+    return;
+  }
+
+  const statusLabels = {
+    PAID: ['bg-g', 'Paid'],
+    FREE: ['bg-g', 'Free'],
+    WAIVED: ['bg-g', 'Waived'],
+    PENDING_PAYMENT: ['bg-y', 'Payment pending'],
+    UNPAID: ['bg-r', 'Unpaid']
+  };
+
+  setHtml(
+    'm-registered-sessions',
+    visible.map(s => {
+      const a = areaStyle(s.area);
+      const sandbox = isProtectedHitPaySession(
+        s.session_id
+      );
+
+      const status = statusLabels[s.payment_status] ||
+        ['bg-gr', 'Payment status unavailable'];
+
+      const paymentEligible = sandbox
+        ? s.payment_status === 'PAID'
+        : ['PAID', 'FREE', 'WAIVED'].includes(
+            s.payment_status
+          );
+
+      const start = new Date(s.start).getTime();
+      const opens = start - 15 * 60 * 1000;
+
+      let accessNote;
+
+      if (!paymentEligible) {
+        accessNote = 'Payment confirmation required';
+      } else if (now < opens) {
+        accessNote = '🔒 Join opens 15 min before start';
+      } else if (!zoomReady(s)) {
+        accessNote = 'Zoom link is not available yet';
+      } else {
+        accessNote = 'Session joining options available';
+      }
+
+      const safeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        .test(String(s.session_id));
+
+      const actions = safeId
+        ? `
+          <button class="btn btn-outline btn-sm"
+                  onclick="openSessionView('${esc(s.session_id)}')">
+            View Session
+          </button>
+          ${paymentEligible
+            ? `<button class="btn btn-ghost btn-sm"
+                       onclick="openJoinModal('${esc(s.session_id)}')">
+                 Join Options
+               </button>`
+            : ''}
+        `
+        : '';
+
+      return `
+        <div class="rec-card"
+             style="min-width:0;cursor:default;">
+
+          <div class="rat"
+               style="background:${a.light};color:${a.color};">
+            ${esc(a.short)}
+          </div>
+
+          <div class="rtitle" style="margin-top:8px;">
+            ${esc(s.title)}
+          </div>
+
+          <div style="font-size:12px;color:var(--t2);margin-bottom:8px;">
+            📅 ${fmtDate(s.start)} · ${fmtTime(s.start)}
+          </div>
+
+          <div style="font-size:11px;color:var(--t3);margin-bottom:9px;">
+            ${esc(s.duration)} min ·
+            ${Number(s.fee) > 0 ? fmtMoney(s.fee) : 'Free'}
+          </div>
+
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;">
+            <span class="badge bg-g">✓ Registered</span>
+            <span class="badge ${status[0]}">
+              ${status[1]}
+            </span>
+          </div>
+
+
+
+          <div style="background:var(--bg);border-radius:var(--r2);padding:9px;font-size:11px;color:var(--t2);margin-bottom:10px;">
+            ${accessNote}
+          </div>
+
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${actions}
+          </div>
+
+        </div>
+      `;
+    }).join('')
+  );
+}
+
 function renderMemberAttendance() {
   const next = memberNextSession();
   if (next) {
@@ -1170,6 +1694,9 @@ function renderMemberAttendance() {
     setHtml('m-att-next', emptyState('📅', 'No upcoming sessions yet.'));
   }
   const filter = memberSessionFilter();
+
+  renderRegisteredUpcomingSessions(filter);
+
   setHtml('m-att-recs', renderRecCards(recommendedSessions(10, filter), 'No open sessions match your filters.'));
 
   const hist = (md().history || []).filter(filter);
@@ -1337,6 +1864,32 @@ async function saveProfile() {
 
 // ── Sessions: register / join / countdown ──
 async function registerForSession(sessionId, btn) {
+
+  // HITPAY_SANDBOX_REGISTRATION_ROUTE
+  // Sandbox sessions must not use legacy registration.
+
+  if (isProtectedHitPaySession(sessionId)) {
+
+    if (typeof GameChangerPaymentUI === 'undefined') {
+
+      showToast(
+        'The sandbox payment interface is unavailable.',
+        'error'
+      );
+
+      return false;
+
+    }
+
+    GameChangerPaymentUI.openCheckout(sessionId);
+
+    // Opening checkout does not mean registration succeeded.
+    return false;
+
+  }
+
+  // Preserve the original registration flow for other sessions.
+
   const orig = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Registering...'; }
   try {
@@ -1362,7 +1915,7 @@ function openSessionView(sessionId) {
   const left = Number(s.capacity || 0) - Number(s.registered_count || 0);
   const full = !s.is_registered && Number(s.capacity) > 0 && left <= 0;
   setText('msv-title', s.title);
-  setHtml('msv-badges', `<span class="badge ${a.badge}">${esc(a.short)}</span>${s.type ? `<span class="badge bg-gr">${esc(s.type)}</span>` : ''}${sessionIsLive(s) ? '<span class="badge bg-r">🔴 Live now</span>' : ''}${s.is_registered ? '<span class="badge bg-g">✓ Registered</span>' : ''}`);
+  setHtml('msv-badges', `<span class="badge ${a.badge}">${esc(a.short)}</span>${s.type ? `<span class="badge bg-gr">${esc(s.type)}</span>` : ''}${sessionIsLive(s) ? '<span class="badge bg-r">🔴 Live now</span>' : ''}${s.is_registered ? '<span class="badge bg-g">✓ Registered</span>' : ''}${s.is_registered && isProtectedHitPaySession(s.session_id) && s.payment_status === 'PAID' ? '<span class="badge bg-g">✓ Paid</span>' : ''}`);
   const row = (k, v) => `<div><div class="mf-lbl">${k}</div><div style="font-size:13px;font-weight:600;">${v}</div></div>`;
   setHtml('msv-details', [
     row('📅 Date', fmtDateLong(s.start)),
@@ -1375,12 +1928,86 @@ function openSessionView(sessionId) {
   setText('msv-desc', s.description || 'No description yet.');
   const note = document.getElementById('msv-note');
   let footer = `<button class="btn btn-ghost" onclick="closeMo('m-session-view')">← Back</button>`;
-  if (s.is_registered) {
+  if (
+    s.is_registered &&
+    isProtectedHitPaySession(s.session_id) &&
+    s.payment_status !== 'PAID'
+  ) {
+    note.style.display = 'block';
+    note.style.background = 'var(--yellow-l)';
+    note.style.color = '#B45309';
+    note.textContent =
+      'Complete your admission payment through HitPay. ' +
+      'Your registration will be confirmed automatically ' +
+      'after successful payment verification.';
+
+    if (['UNPAID', 'PENDING_PAYMENT'].includes(s.payment_status)) {
+      footer += `<button class="btn btn-primary"
+        onclick="registerFromView('${esc(s.session_id)}')">
+        💳 Pay Now
+      </button>`;
+    }
+  // HITPAY_PAID_SESSION_VIEW_V1
+  } else if (
+    s.is_registered &&
+    isProtectedHitPaySession(s.session_id) &&
+    s.payment_status === 'PAID'
+  ) {
+    note.style.display = 'block';
+    note.style.background = 'var(--green-l)';
+    note.style.color = 'var(--green)';
+
+    const paymentMessage =
+      'Payment confirmed. Your registration is complete. ' +
+      'No additional payment is required. ';
+
+    const start = new Date(s.start).getTime();
+    const end = new Date(s.end).getTime();
+    const now = Date.now();
+
+    let accessMessage;
+
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      end <= start
+    ) {
+      accessMessage = 'Session schedule is unavailable.';
+    } else if (now >= end) {
+      accessMessage = 'This session has ended.';
+    } else if (!zoomReady(s)) {
+      accessMessage =
+        'The Zoom link is not available yet. ' +
+        'Joining opens 15 minutes before the scheduled start, ' +
+        'once the link is ready.';
+    } else if (now < start - 15 * 60 * 1000) {
+      accessMessage =
+        'Joining opens 15 minutes before the scheduled start.';
+    } else {
+      accessMessage =
+        'Open Join Options to access the session.';
+    }
+
+    note.textContent = paymentMessage + accessMessage;
+
+    if (
+      Number.isFinite(start) &&
+      Number.isFinite(end) &&
+      end > start &&
+      now < end
+    ) {
+      footer += `<button class="btn btn-primary"
+        onclick="closeMo('m-session-view');openJoinModal('${esc(s.session_id)}')">
+        🎯 Join Options
+      </button>`;
+    }
+
+  } else if (s.is_registered) {
     note.style.display = 'block'; note.style.background = 'var(--green-l)'; note.style.color = 'var(--green)';
     note.textContent = zoomReady(s) ? "You're registered. The Join button opens 15 minutes before the session starts."
       : s.payment_status === 'PENDING_PAYMENT' ? "You're registered. Your payment is waiting for an admin to confirm it — the Zoom link unlocks after that."
       : "You're registered. Pay the admission fee and submit your reference number to unlock the Zoom link.";
-    if (!zoomReady(s) && s.payment_status !== 'PENDING_PAYMENT' && Number(s.fee) > 0) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment</button>`;
+    if (!isProtectedHitPaySession(s.session_id) && !zoomReady(s) && s.payment_status !== 'PENDING_PAYMENT' && Number(s.fee) > 0) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment</button>`;
     if (zoomReady(s)) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openJoinModal('${esc(s.session_id)}')">🎯 Join options</button>`;
   } else if (full) {
     note.style.display = 'block'; note.style.background = 'var(--red-l)'; note.style.color = 'var(--red-d)';
@@ -1388,14 +2015,61 @@ function openSessionView(sessionId) {
   } else {
     note.style.display = Number(s.fee) > 0 ? 'block' : 'none'; note.style.background = 'var(--yellow-l)'; note.style.color = '#B45309';
     note.textContent = `This session has a ${fmtMoney(s.fee)} admission fee. Your seat and Zoom link are confirmed once payment is received.`;
-    footer += `<button class="btn btn-primary" id="msv-register" onclick="registerFromView('${esc(s.session_id)}')">✓ Register</button>`;
+    const isHitPaySandbox =
+      isProtectedHitPaySession(s.session_id);
+
+    if (isHitPaySandbox) {
+
+      note.style.display = 'block';
+
+      note.textContent =
+        'HitPay Sandbox testing only. Registration is confirmed ' +
+        'only after successful backend payment verification.';
+
+    }
+
+    footer += `<button class="btn btn-primary" id="msv-register" onclick="registerFromView('${esc(s.session_id)}')">${isHitPaySandbox ? '💳 Pay to Register' : '✓ Register'}</button>`;
   }
   setHtml('msv-footer', footer);
   openMo('m-session-view');
 }
 async function registerFromView(sessionId) {
-  const ok = await registerForSession(sessionId, document.getElementById('msv-register'));
+
+  if (
+    isProtectedHitPaySession(sessionId)
+  ) {
+
+    if (typeof GameChangerPaymentUI === 'undefined') {
+
+      showToast(
+        'The sandbox payment interface is unavailable.',
+        'error'
+      );
+
+      return;
+
+    }
+
+    const opened =
+      GameChangerPaymentUI.openCheckout(sessionId);
+
+    if (opened) {
+
+      closeMo('m-session-view');
+
+    }
+
+    return;
+
+  }
+
+  const ok = await registerForSession(
+    sessionId,
+    document.getElementById('msv-register')
+  );
+
   if (ok) closeMo('m-session-view');
+
 }
 function openJoinModal(sessionId) {
   const s = (md().upcoming || []).find(x => x.session_id === sessionId);
@@ -1406,8 +2080,19 @@ function openJoinModal(sessionId) {
   setHtml('m-join-body', `You're joining: <strong>${esc(s.title)}</strong> with ${esc(s.speaker)}<br><br>📅 ${fmtDate(s.start)} · ${fmtTime(s.start)} · ${esc(s.duration)} min<br><br>You may wait in the Zoom waiting room until the host lets you in. Your attendance is recorded from Zoom automatically.`);
   let footer;
   if (!s.is_registered) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');registerForSession('${esc(s.session_id)}')">+ Register</button>`;
+  else if (
+    isProtectedHitPaySession(s.session_id) &&
+    s.payment_status !== 'PAID'
+  ) {
+    footer = ['UNPAID', 'PENDING_PAYMENT'].includes(s.payment_status)
+      ? `<button class="btn btn-primary"
+          onclick="closeMo('m-join-modal');openSessionView('${esc(s.session_id)}')">
+          💳 Complete Payment
+        </button>`
+      : `<span class="badge bg-y">Payment verification required</span>`;
+  }
   else if (!zoomReady(s) && s.payment_status === 'PENDING_PAYMENT') footer = `<span class="badge bg-y">⏳ Payment sent — waiting for confirmation</span>`;
-  else if (!zoomReady(s) && Number(s.fee) > 0) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment to unlock Zoom</button>`;
+  else if (!isProtectedHitPaySession(s.session_id) && !zoomReady(s) && Number(s.fee) > 0) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment to unlock Zoom</button>`;
   else if (!zoomReady(s)) footer = `<span class="badge bg-y">⏳ The Zoom link isn't ready yet</span>`;
   else if (live) footer = `<button class="btn btn-primary" onclick="handleJoinSession('${esc(s.session_id)}', this)">🚀 Join Now</button>`;
   else footer = `<span class="badge bg-b">🔒 Join opens 15 minutes before the scheduled start</span>`;
@@ -1424,7 +2109,28 @@ async function handleJoinSession(sessionId, btn) {
     showToast('Joining opens 15 minutes before the scheduled start.', 'info', 5000);
     return;
   }
-  let url = s.zoom_join_url;                               // only present if 15_join_lock.sql hasn't been run
+  if (isProtectedHitPaySession(sessionId)) {
+    if (
+      currentRole !== 'member' ||
+      !loggedInUser?.uid ||
+      !s.is_registered ||
+      s.payment_status !== 'PAID'
+    ) {
+      showToast('Verified HitPay payment is required.', 'info');
+      return;
+    }
+
+    const end = new Date(s.end).getTime();
+
+    if (!Number.isFinite(end) || Date.now() >= end) {
+      showToast('This session is unavailable.', 'info');
+      return;
+    }
+  }
+
+  let url = isProtectedHitPaySession(sessionId)
+    ? null
+    : s.zoom_join_url;                               // only present if 15_join_lock.sql hasn't been run
   if (!url) {
     const tab = window.open('', '_blank');                 // open first — browsers block tabs opened after waiting
     if (tab) { try { tab.document.write('<p style="font-family:sans-serif;padding:24px;">Opening Zoom…</p>'); } catch (_) { /* ignore */ } }
@@ -1492,11 +2198,87 @@ function handleMemberSearch(query) {
 // ADMIN: load + render
 // ════════════════════════════════════════════════
 let lastDataLoad = 0;
-let adminPayments = null;      // admin_payments(): every payment + every unpaid registration
+// HITPAY_ADMIN_PAYMENT_ISOLATION_V1
+
+var adminPaymentOwner = null;
+var adminPaymentGeneration = 0;
+
+function invalidateAdminPaymentState() {
+  adminPaymentGeneration++;
+  adminPaymentOwner = null;
+  adminPayments = null;
+
+  for (const id of [
+    'a-payments-tbody',
+    'a-pay-review',
+    'apd-hitpay-details',
+    'apd-member',
+    'apd-session',
+    'apd-amount',
+    'apd-method',
+    'apd-date',
+    'apd-status',
+    'apd-extra'
+  ]) {
+    const element = document.getElementById(id);
+    if (element) element.replaceChildren();
+  }
+
+  for (const id of [
+    'a-pay-collected',
+    'a-pay-pending',
+    'a-pay-count'
+  ]) {
+    setText(id, '—');
+  }
+
+  closeMo('a-payment-detail');
+  closeMo('a-pay-review-mo');
+}
+
+function ownsAdminPaymentRecords() {
+  return currentRole === 'admin' &&
+    !!loggedInUser?.uid &&
+    adminPaymentOwner === loggedInUser.uid &&
+    Array.isArray(adminPayments);
+}
+
+var adminPayments = null;      // admin_payments(): every payment + every unpaid registration
 async function loadAdminData() {
+  const owner = loggedInUser?.uid;
+  const generation = ++adminPaymentGeneration;
+
+  if (currentRole !== 'admin' || !owner) return;
+
+  const before = await sb.auth.getSession();
+
+  if (
+    before.error ||
+    before.data?.session?.user?.id !== owner ||
+    generation !== adminPaymentGeneration
+  ) return;
+
   lastDataLoad = Date.now();
   const [dash, who, list, pays] = await Promise.allSettled([rpc('admin_dashboard'), rpc('admin_whoami'), rpc('admin_members'), rpc('admin_payments')]);
-  adminPayments = pays.status === 'fulfilled' ? (pays.value || []) : null;
+  const after = await sb.auth.getSession();
+
+  if (
+    after.error ||
+    after.data?.session?.user?.id !== owner ||
+    generation !== adminPaymentGeneration ||
+    currentRole !== 'admin' ||
+    loggedInUser?.uid !== owner
+  ) return;
+
+  adminPaymentOwner = owner;
+
+  adminPayments =
+    who.status === 'fulfilled' &&
+    who.value?.user_id === owner &&
+    pays.status === 'fulfilled' &&
+    Array.isArray(pays.value)
+      ? pays.value
+      : null;
   if (pays.status === 'rejected') console.error('[Supabase] admin_payments failed — did you run 13_payments.sql?', pays.reason);
   adminData = dash.status === 'fulfilled' ? dash.value : null;
   adminMe = who.status === 'fulfilled' ? who.value : null;
@@ -2212,38 +2994,199 @@ const CHANNEL_LABEL = { GCASH: 'GCash', MAYA: 'Maya', CARD: 'Card', QR_PH: 'QR P
 function paymentBadge(status) { const [c, t] = PAYMENT_LABEL[status] || ['bg-gr', status || '—']; return `<span class="badge ${c}">${t}</span>`; }
 // rows for the Payment page: admin_payments() when 13_payments.sql has run, else the old list
 function paymentRows() {
-  if (adminPayments) return adminPayments.map((p, n) => Object.assign({ key: p.transaction_id || 'reg-' + p.registration_id }, p));
-  return (ad().payments || []).map(p => Object.assign({ key: p.transaction_id }, p));
+  if (!ownsAdminPaymentRecords()) return [];
+
+  return adminPayments.map(p => ({
+    ...p,
+    key: p.transaction_id || 'reg-' + p.registration_id
+  }));
 }
+// HITPAY_ADMIN_PAYMENT_RECORDS_V1
+
+function adminPaymentDisplayStatus(p) {
+  if (
+    p.reconciliation_required === true ||
+    p.checkout_state === 'REVIEW_REQUIRED' ||
+    p.display_status === 'REVIEW_REQUIRED'
+  ) {
+    return 'REVIEW_REQUIRED';
+  }
+
+  return p.status;
+}
+
+function adminPaymentStatusBadge(p) {
+  const status = adminPaymentDisplayStatus(p);
+
+  if (status === 'REVIEW_REQUIRED') {
+    return '<span style="color:#B45309;font-weight:700;">Review required</span>';
+  }
+
+  const allowed = [
+    'PAID', 'PENDING_PAYMENT', 'UNPAID',
+    'FAILED', 'CANCELLED', 'REFUNDED',
+    'WAIVED', 'FREE'
+  ];
+
+  return allowed.includes(status)
+    ? paymentBadge(status)
+    : 'Unknown';
+}
+
+function adminPaymentIsSandbox(p) {
+  return p.is_sandbox === true ||
+    String(p.payment_provider || '').toUpperCase() === 'HITPAY';
+}
+
+function adminPaymentMetadata(p) {
+  if (!adminPaymentIsSandbox(p)) return '';
+
+  return '<div style="font-size:11px;color:#B45309;font-weight:600;">' +
+    'HitPay Sandbox · Test only</div>';
+}
+
+function adminPaymentReference(p) {
+  if (adminPaymentIsSandbox(p)) {
+    return p.order_ref || '';
+  }
+
+  return p.reference || p.hitpay_ref || p.order_ref || '';
+}
+
+function adminPaymentAmount(p) {
+  const amount = Number(p.amount);
+
+  return Number.isFinite(amount) && amount >= 0
+    ? amount
+    : 0;
+}
+
+function adminPaymentReceiptAvailable(p) {
+  return adminPaymentIsSandbox(p) &&
+    p.payment_provider === 'HITPAY' &&
+    p.is_sandbox === true &&
+    p.status === 'PAID' &&
+    adminPaymentDisplayStatus(p) === 'PAID' &&
+    p.gateway_payment_verified === true &&
+    p.registration_completed === true &&
+    p.reconciliation_required === false &&
+    p.checkout_state === 'CREATED' &&
+    p.receipt_available === true;
+}
+
 function filteredPayments() {
   const sess = document.getElementById('a-pay-session')?.value || '';
   const st = document.getElementById('a-pay-status')?.value || '';
   const q = (document.getElementById('a-pay-search')?.value || '').trim().toLowerCase();
-  return paymentRows().filter(p => (!sess || p.session_id === sess) && (!st || p.status === st)
-    && (!q || [p.member, p.email, p.reference].some(v => String(v || '').toLowerCase().includes(q))));
+  return paymentRows().filter(p => (!sess || p.session_id === sess) && (!st || adminPaymentDisplayStatus(p) === st)
+    && (!q || [p.member, p.email, p.session, adminPaymentReference(p)].some(v => String(v || '').toLowerCase().includes(q))));
 }
+
+// HITPAY_LEGACY_PAYMENT_PROTECTION_V1
+
+// DYNAMIC_HITPAY_SESSION_ROUTING_V1
+
+function isProtectedHitPaySession(sessionId) {
+  if (typeof sessionId !== 'string') return false;
+
+  const sessions = currentRole === 'member'
+    ? [
+        ...(md().upcoming || []),
+        ...(mp().registrations || [])
+      ]
+    : currentRole === 'admin'
+      ? (ad().sessions || [])
+      : [];
+
+  const session = sessions.find(
+    s => s.session_id === sessionId
+  );
+
+  const fee = Number(session?.fee);
+
+  return !!session &&
+    Number.isFinite(fee) &&
+    fee > 0;
+}
+
+
+function isProtectedHitPayPayment(payment) {
+  if (!payment || typeof payment !== 'object') {
+    return false;
+  }
+
+  return (
+    isProtectedHitPaySession(payment.session_id) ||
+    String(payment.payment_provider || '')
+      .trim().toUpperCase() === 'HITPAY' ||
+    payment.is_sandbox === true
+  );
+}
+
+function canUseLegacyPaymentReview(payment) {
+  if (
+    !payment ||
+    typeof payment !== 'object' ||
+    typeof payment.session_id !== 'string' ||
+    !payment.session_id.trim() ||
+    !payment.registration_id ||
+    payment.session_status === 'Cancelled' ||
+    isProtectedHitPayPayment(payment)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function showHitPayManualActionBlocked() {
+  showToast(
+    'HitPay payments require verified gateway confirmation. ' +
+    'Manual payment actions are unavailable.',
+    'info',
+    5000
+  );
+}
+
+
 function paymentActions(p) {
+  if (
+    typeof p.key !== 'string' ||
+    !/^(reg-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(p.key)
+  ) return '';
   const view = `<button class="btn btn-xs btn-ghost" onclick="openPaymentDetail('${esc(p.key)}')">View</button>`;
-  if (!p.registration_id || p.session_status === 'Cancelled') return view;
+  if (!canUseLegacyPaymentReview(p)) return view;
   if (p.status === 'PENDING_PAYMENT') return `<button class="btn btn-xs btn-green" onclick="openPaymentReview('${esc(p.key)}','confirm')">✓ Confirm</button><button class="btn btn-xs btn-danger" onclick="openPaymentReview('${esc(p.key)}','reject')">Reject</button>${view}`;
   if (p.status === 'UNPAID' && p.reg_payment_status !== 'PAID') return `<button class="btn btn-xs btn-ghost" onclick="openPaymentReview('${esc(p.key)}','mark')">Mark as paid</button>`;
   return view;
 }
 function renderPayments() {
-  const loaded = !!adminData, rows = paymentRows();
-  const sum = list => list.reduce((a, p) => a + Number(p.amount || 0), 0);
-  const toReview = rows.filter(p => p.status === 'PENDING_PAYMENT'), unpaid = rows.filter(p => p.status === 'UNPAID');
+  const loaded = ownsAdminPaymentRecords(), rows = paymentRows();
+  const sum = list => list
+    .filter(p => !adminPaymentIsSandbox(p))
+    .reduce((a, p) => a + adminPaymentAmount(p), 0);
+  const pendingPayments = rows.filter(
+    p => p.status === 'PENDING_PAYMENT'
+  );
+
+  const toReview = pendingPayments.filter(
+    canUseLegacyPaymentReview
+  );
+
+  const unpaid = rows.filter(
+    p => p.status === 'UNPAID' && !adminPaymentIsSandbox(p)
+  );
   setText('a-pay-collected', loaded ? fmtMoney(sum(rows.filter(p => p.status === 'PAID'))) : '—');
-  setText('a-pay-pending', loaded ? fmtMoney(sum(toReview) + sum(unpaid)) : '—');
+  setText('a-pay-pending', loaded ? fmtMoney(sum(pendingPayments) + sum(unpaid)) : '—');
   setText('a-pay-pending-lbl', loaded ? `To confirm (${fmtInt(toReview.length)}) · Unpaid (${fmtInt(unpaid.length)})` : 'Pending');
   setText('a-pay-count', loaded ? fmtInt(rows.filter(p => p.transaction_id).length) : '—');
 
   // "Needs your action": payments members submitted and are waiting for an admin
   const box = document.getElementById('a-pay-review');
   if (box) {
-    if (!adminPayments && loaded) {
+    if (!adminPayments && adminData) {
       box.style.display = 'block';
-      box.innerHTML = `<div class="rep-msg is-error" style="margin:0 0 14px;"><span>⚠</span><div><strong>Payments can't be confirmed yet.</strong> Run <code>supabase/13_payments.sql</code> in the Supabase SQL Editor, then reload this page.</div></div>`;
+      box.innerHTML = `<div class="rep-msg is-error" style="margin:0 0 14px;"><span>⚠</span><div><strong>Payments can't be confirmed yet.</strong> Payment records are unavailable. Reload or contact the system administrator.</div></div>`;
     } else {
       box.style.display = toReview.length ? 'block' : 'none';
       box.innerHTML = toReview.length ? `<div class="card cp" style="border-left:4px solid var(--yellow);margin-bottom:14px;"><div style="font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:9px;">⏳ Waiting for your confirmation (${toReview.length})</div>
@@ -2255,29 +3198,114 @@ function renderPayments() {
   const list = filteredPayments();
   setHtml('a-payments-tbody', list.length ? list.map((p, i) => {
     const [bg, fg] = colors[i % colors.length];
-    return `<tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${fg};">${esc(initialsOf(p.member))}</div><div class="nc">${esc(p.member || p.email || '—')}</div></div></td><td>${esc(p.session || '—')}</td><td style="font-weight:700;">${fmtMoney(p.amount)}</td><td>${p.channel ? esc(CHANNEL_LABEL[p.channel] || p.channel) : '—'}${p.reference ? `<div style="font-size:11px;color:var(--t3);">Ref ${esc(p.reference)}</div>` : ''}</td><td>${fmtDateShort(p.date)}</td><td>${paymentBadge(p.status)}</td><td><div style="display:flex;gap:5px;flex-wrap:wrap;">${paymentActions(p)}</div></td></tr>`;
+    return `<tr><td><div style="display:flex;align-items:center;gap:7px;"><div style="width:27px;height:27px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${fg};">${esc(initialsOf(p.member))}</div><div class="nc">${esc(p.member || p.email || '—')}</div></div></td><td>${esc(p.session || '—')}${adminPaymentMetadata(p)}</td><td style="font-weight:700;">${fmtMoney(p.amount)}</td><td>${p.channel ? esc(CHANNEL_LABEL[p.channel] || p.channel) : '—'}${p.reference ? `<div style="font-size:11px;color:var(--t3);">Ref ${esc(p.reference)}</div>` : ''}</td><td>${fmtDateShort(p.date)}</td><td>${adminPaymentStatusBadge(p)}</td><td><div style="display:flex;gap:5px;flex-wrap:wrap;">${paymentActions(p)}</div></td></tr>`;
   }).join('') : emptyRow(7, paymentRows().length ? 'No payments match your filters.' : 'No payments yet. Members who register for a paid session appear here.'));
 }
 function openPaymentDetail(key) {
+  if (currentRole !== 'admin' || !loggedInUser?.uid) return;
   const p = paymentRows().find(x => x.key === key); if (!p) return;
   setText('apd-member', p.member || p.email || '—');
   setText('apd-session', p.session || '—');
   setText('apd-amount', fmtMoney(p.amount) + (p.currency && p.currency !== 'PHP' ? ' ' + p.currency : ''));
   setText('apd-method', CHANNEL_LABEL[p.channel] || p.channel || '—');
   setText('apd-date', p.date ? `${fmtDate(p.date)} ${fmtTime(p.date)}` : '—');
-  setHtml('apd-status', paymentBadge(p.status));
+  setHtml('apd-status', adminPaymentStatusBadge(p));
   const row = document.getElementById('apd-extra-row');
   const extra = p.status === 'FAILED' && p.rejection_reason ? ['Rejected because', p.rejection_reason]
     : (p.reference || p.hitpay_ref || p.order_ref) ? ['Reference No.', p.reference || p.hitpay_ref || p.order_ref] : null;
   if (extra) { row.style.display = 'flex'; setText('apd-extra-label', extra[0]); setText('apd-extra', extra[1] + (p.reviewed_by ? ` · reviewed by ${p.reviewed_by}` : '')); }
   else row.style.display = 'none';
+  const hpDetails = document.getElementById('apd-hitpay-details');
+
+  if (hpDetails) {
+    hpDetails.replaceChildren();
+    hpDetails.hidden = !adminPaymentIsSandbox(p);
+
+    if (!hpDetails.hidden) {
+      const fields = [
+        ['Provider', 'HitPay Sandbox'],
+        ['Environment', 'Test only — no real funds'],
+        ['Order reference', p.order_ref || '—'],
+        ['Checkout state', p.checkout_state || '—'],
+        ['Recorded gateway evidence',
+          p.gateway_payment_verified === true
+            ? 'Available' : 'Not confirmed'],
+        ['Registration',
+          p.registration_completed === true
+            ? 'Completed' : 'Not completed'],
+        ['Receipt',
+          adminPaymentReceiptAvailable(p)
+            ? 'Available to member' : 'Unavailable'],
+        ['Reconciliation',
+          adminPaymentDisplayStatus(p) === 'REVIEW_REQUIRED'
+            ? 'Required — contact SU Admin'
+            : 'Not flagged']
+      ];
+
+      if (p.can_view_gateway_details === true) {
+        fields.push(
+          ['Gateway request ID', p.gateway_request_id || '—'],
+          ['Gateway reference', p.hitpay_ref || '—'],
+          ['Gateway verified at', p.gateway_verified_at || '—'],
+          ['Reconciliation reason', p.reconciliation_reason || '—']
+        );
+      }
+
+      for (const [label, value] of fields) {
+        const line = document.createElement('div');
+        line.style.marginTop = '8px';
+
+        const title = document.createElement('strong');
+        title.textContent = label + ': ';
+
+        const detail = document.createElement('span');
+        detail.textContent = String(value);
+
+        line.append(title, detail);
+        hpDetails.appendChild(line);
+      }
+    }
+  }
+
   openMo('a-payment-detail');
 }
 
 // ── Confirm / reject / mark as paid (13_payments.sql) ──
 let reviewingPayment = null;
 function openPaymentReview(key, mode) {
-  const p = paymentRows().find(x => x.key === key); if (!p) return;
+  const p = paymentRows().find(x => x.key === key);
+
+  if (
+    currentRole !== 'admin' ||
+    !loggedInUser ||
+    !p ||
+    !canUseLegacyPaymentReview(p)
+  ) {
+    reviewingPayment = null;
+    showHitPayManualActionBlocked();
+    return;
+  }
+
+  const validMode =
+    (
+      p.status === 'PENDING_PAYMENT' &&
+      ['confirm', 'reject'].includes(mode)
+    ) ||
+    (
+      p.status === 'UNPAID' &&
+      p.reg_payment_status !== 'PAID' &&
+      mode === 'mark'
+    );
+
+  if (!validMode) {
+    reviewingPayment = null;
+    showToast(
+      'This payment action is unavailable.',
+      'info'
+    );
+    return;
+  }
+
   reviewingPayment = { p, mode };
   const title = { confirm: '✓ Confirm Payment', reject: 'Reject Payment', mark: 'Mark as Paid' }[mode];
   setText('apr-title', title);
@@ -2295,8 +3323,53 @@ function openPaymentReview(key, mode) {
   openMo('a-pay-review-mo');
 }
 async function submitPaymentReview() {
-  if (!reviewingPayment) return;
-  const { p, mode } = reviewingPayment;
+  if (
+    currentRole !== 'admin' ||
+    !loggedInUser ||
+    !reviewingPayment
+  ) return;
+
+  const selectedPayment = reviewingPayment.p;
+  const mode = reviewingPayment.mode;
+
+  const p = paymentRows().find(
+    row => row.key === selectedPayment.key
+  );
+
+  if (
+    !p ||
+    !canUseLegacyPaymentReview(selectedPayment) ||
+    !canUseLegacyPaymentReview(p) ||
+    p.registration_id !== selectedPayment.registration_id ||
+    p.session_id !== selectedPayment.session_id
+  ) {
+    reviewingPayment = null;
+    closeMo('a-pay-review-mo');
+    showHitPayManualActionBlocked();
+    return;
+  }
+
+  const validMode =
+    (
+      p.status === 'PENDING_PAYMENT' &&
+      ['confirm', 'reject'].includes(mode)
+    ) ||
+    (
+      p.status === 'UNPAID' &&
+      p.reg_payment_status !== 'PAID' &&
+      mode === 'mark'
+    );
+
+  if (!validMode) {
+    reviewingPayment = null;
+    closeMo('a-pay-review-mo');
+    showToast(
+      'The payment status has changed. Reload the records.',
+      'info'
+    );
+    return;
+  }
+
   const g = id => (document.getElementById(id)?.value || '').trim();
   const err = document.getElementById('apr-err'); err.style.display = 'none';
   if (mode === 'mark') {
@@ -2571,43 +3644,151 @@ async function sendMyPasswordReset() {
 // ════════════════════════════════════════════════
 let memberPayments = null;   // { transactions: [...], registrations: [...] }
 async function loadMemberPayments() {
+  const context = captureMemberPaymentContext();
+
+  if (!context) return false;
+
+  const requestId = ++memberPaymentLoadGeneration;
+
+  const isCurrent = () =>
+    isCurrentMemberPaymentContext(context) &&
+    requestId === memberPaymentLoadGeneration;
+
+  if (
+    !await verifyMemberPaymentContext(context) ||
+    !isCurrent()
+  ) {
+    return false;
+  }
+
+  let result;
+
   try {
-    memberPayments = await rpc('member_payments');
-  } catch (e) {
-    console.warn('[Supabase] member_payments not available — run 09_member_payments.sql. Showing registrations only.', e);
-    // fallback: what member_dashboard already knows
-    const d = md();
-    memberPayments = {
-      fallback: true, transactions: [],
-      registrations: [
-        ...(d.upcoming || []).filter(s => s.is_registered).map(s => ({ session_id: s.session_id, session: s.title, start: s.start, fee: s.fee, payment_status: s.payment_status, session_status: s.status })),
-        ...(d.history || []).map(h => ({ session_id: h.session_id, session: h.title, start: h.start, fee: null, payment_status: h.payment_status, session_status: h.session_status }))
-      ]
+    result = await rpc('member_payments');
+
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !Array.isArray(result.transactions) ||
+      !Array.isArray(result.registrations) ||
+      result.transactions.some(
+        t => !t || typeof t !== 'object'
+      ) ||
+      result.registrations.some(
+        r => !r || typeof r !== 'object'
+      )
+    ) {
+      throw new Error(
+        'Invalid member payment response.'
+      );
+    }
+
+  } catch (error) {
+    if (
+      !isCurrent() ||
+      !await verifyMemberPaymentContext(context) ||
+      !isCurrent()
+    ) {
+      return false;
+    }
+
+    console.warn(
+      '[Supabase] Member payment history unavailable.'
+    );
+
+    // Fail closed instead of displaying unverified
+    // fallback registrations from another data source.
+
+    result = {
+      fallback: true,
+      transactions: [],
+      registrations: []
     };
   }
+
+  if (
+    !isCurrent() ||
+    !await verifyMemberPaymentContext(context) ||
+    !isCurrent()
+  ) {
+    return false;
+  }
+
+  memberPaymentOwnerId = context.userId;
+  memberPayments = result;
+
   renderMemberPayments();
   updateMemberBadges();
+
+  return !result.fallback;
 }
-function mp() { return memberPayments || { transactions: [], registrations: [] }; }
-// Where members send their payment. Fill these in with HR Calabarzon's real accounts.
-// Example: { method: 'GCash', name: 'HR Calabarzon', number: '0917 123 4567' }
-const PAYMENT_ACCOUNTS = [];
+
+function mp() {
+  return ownsMemberPaymentCache()
+    ? memberPayments
+    : {
+        transactions: [],
+        registrations: []
+      };
+}
+
 let payingSessionId = null;
 function openSubmitPayment(sessionId) {
+
+  // Sandbox sessions cannot use manual payment references.
+
+  if (
+    isProtectedHitPaySession(sessionId)
+  ) {
+
+    showToast(
+      'This session requires the HitPay Sandbox payment process.',
+      'info'
+    );
+
+    return;
+
+  }
+
+  // Preserve the legacy form for ordinary sessions.
+
   const r = (mp().registrations || []).find(x => x.session_id === sessionId);
   const s = r || (md().upcoming || []).find(x => x.session_id === sessionId);
   if (!s) { showToast('Register for the session first.', 'info'); return; }
   payingSessionId = sessionId;
   setHtml('msp-summary', `<div style="font-family:var(--font-h);font-weight:700;">${esc(s.session || s.title)}</div><div style="color:var(--t2);">${fmtDate(s.start)} · ${fmtTime(s.start)}</div><div style="font-size:20px;font-weight:800;margin-top:6px;">${fmtMoney(s.fee)}</div>`);
-  setHtml('msp-accounts', PAYMENT_ACCOUNTS.length
-    ? `<div style="font-size:12px;color:var(--t3);margin-bottom:5px;">Send the exact amount to:</div>` + PAYMENT_ACCOUNTS.map(a => `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--bg);border-radius:var(--r2);margin-bottom:5px;"><span><strong>${esc(a.method)}</strong> · ${esc(a.name || '')}</span><strong>${esc(a.number || '')}</strong></div>`).join('')
-    : `<div style="font-size:12px;color:var(--t2);">Pay using the GCash / Maya / bank details HR Calabarzon gave you, then enter the reference number below.</div>`);
+  setHtml(
+    'msp-accounts',
+    `<div style="font-size:12px;color:var(--t2);">
+      This form is for ordinary sessions using the existing
+      manual payment process. Submit only a reference from
+      an actual payment already made through official
+      HR Calabarzon instructions.
+      This form does not process HitPay payments.
+    </div>`
+  );
   ['msp-channel', 'msp-ref'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; setFieldError(id, ''); });
   if (r?.pending_reference) document.getElementById('msp-ref').value = r.pending_reference;
   document.getElementById('msp-err').style.display = 'none';
   openMo('m-submit-payment');
 }
 async function submitMemberPayment() {
+
+  if (
+    currentRole !== 'member' ||
+    !loggedInUser ||
+    !payingSessionId
+  ) {
+    return;
+  }
+
+  if (isProtectedHitPaySession(payingSessionId)) {
+    payingSessionId = null;
+    closeMo('m-submit-payment');
+    showHitPayManualActionBlocked();
+    return;
+  }
+
   const ch = document.getElementById('msp-channel').value, ref = document.getElementById('msp-ref').value.trim().replace(/\s+/g, '');
   setFieldError('msp-channel', ch ? '' : 'Choose how you paid.');
   setFieldError('msp-ref', !ref ? 'Enter the reference number from your receipt.' : /^[A-Za-z0-9-]{6,40}$/.test(ref) ? '' : 'The reference number should be 6–40 letters or numbers, exactly as on your receipt.');
@@ -2628,30 +3809,540 @@ function memberDues() {
     && r.session_status !== 'Cancelled' && Number(r.fee || 0) > 0);
 }
 const REG_PAY_LABEL = { UNPAID: ['bg-y', '⏳ Unpaid'], PENDING_PAYMENT: ['bg-y', '⏳ Payment pending'], PAID: ['bg-g', '✓ Paid'], FREE: ['bg-b', 'Free'], WAIVED: ['bg-p', '🎁 Waived'] };
+
+// HITPAY_MEMBER_PAYMENT_HISTORY_V1
+
+function isMemberHitPayTransaction(payment) {
+  return !!payment &&
+    String(payment.payment_provider || '')
+      .trim().toUpperCase() === 'HITPAY';
+}
+
+function isMemberSandboxPayment(payment) {
+  return !!payment && (
+    payment.is_sandbox === true ||
+    isMemberHitPayTransaction(payment)
+  );
+}
+
+function memberPaymentDisplayStatus(payment) {
+  if (!payment || typeof payment !== 'object') {
+    return 'UNKNOWN';
+  }
+
+  if (isMemberHitPayTransaction(payment)) {
+    if (
+      payment.reconciliation_required === true ||
+      payment.checkout_state === 'REVIEW_REQUIRED' ||
+      payment.display_status === 'REVIEW_REQUIRED'
+    ) {
+      return 'REVIEW_REQUIRED';
+    }
+  }
+
+  return String(payment.status || 'UNKNOWN')
+    .trim().toUpperCase();
+}
+
+function memberPaymentStatusBadge(payment) {
+  const status = memberPaymentDisplayStatus(payment);
+
+  if (status === 'REVIEW_REQUIRED') {
+    return '<span class="badge bg-y">Review required</span>';
+  }
+
+  if (
+    status === 'PENDING_PAYMENT' &&
+    isMemberHitPayTransaction(payment)
+  ) {
+    return '<span class="badge bg-y">Payment pending</span>';
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      PAYMENT_LABEL,
+      status
+    )
+  ) {
+    return paymentBadge(status);
+  }
+
+  return '<span class="badge bg-gr">Unknown</span>';
+}
+
+function memberPaymentAmount(value) {
+  const amount = Number(value);
+
+  return Number.isFinite(amount) && amount >= 0
+    ? amount
+    : 0;
+}
+
+function memberActualPaidTotal(transactions) {
+  return transactions
+    .filter(t =>
+      t.status === 'PAID' &&
+      !isMemberSandboxPayment(t) &&
+      !isMemberHitPayTransaction(t)
+    )
+    .reduce(
+      (total, t) =>
+        total + memberPaymentAmount(t.amount),
+      0
+    );
+}
+
+function memberActualPaymentDues(dues) {
+  return dues.filter(
+    r => !isMemberSandboxPayment(r)
+  );
+}
+
+function memberPaymentMetadata(payment) {
+  const hitpay = isMemberHitPayTransaction(payment);
+  const sandbox = isMemberSandboxPayment(payment);
+
+  const labels = [];
+
+  if (hitpay) {
+    labels.push(
+      '<span class="hp-history-provider">HitPay</span>'
+    );
+  }
+
+  if (sandbox) {
+    labels.push(
+      '<span class="hp-history-sandbox">Sandbox</span>'
+    );
+  }
+
+  if (!labels.length) {
+    return '';
+  }
+
+  return `<div class="hp-history-meta">
+    ${labels.join('')}
+  </div>`;
+}
+
+function memberPaymentReference(payment) {
+  const reference = payment.reference || '';
+  const order = isMemberHitPayTransaction(payment)
+    ? payment.order_reference || ''
+    : '';
+
+  const primary = reference || order || '—';
+
+  const secondary = order && order !== primary
+    ? `<div class="hp-history-order">
+        Order: ${esc(order)}
+      </div>`
+    : '';
+
+  return `<div class="hp-history-reference">
+    ${esc(primary)}
+    ${secondary}
+  </div>`;
+}
+
+function memberPaymentMatchesSearch(payment, query) {
+  if (!query) return true;
+
+  return [
+    payment.session,
+    payment.reference,
+    payment.order_reference,
+    payment.payment_provider,
+    isMemberSandboxPayment(payment)
+      ? 'sandbox'
+      : ''
+  ].some(value =>
+    String(value || '')
+      .toLowerCase()
+      .includes(query)
+  );
+}
+
+
+// HITPAY_MEMBER_PAYMENT_ACTIONS_V1
+
+function isMemberPaymentOrderReference(value) {
+  return typeof value === 'string' &&
+    /^GC-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      .test(value);
+}
+
+function isMemberPaymentTransactionId(value) {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      .test(value);
+}
+
+function memberPaymentStatusServiceReady() {
+  return (
+    typeof GameChangerPayment !== 'undefined' &&
+    typeof GameChangerPaymentUI !== 'undefined' &&
+    GameChangerPayment.CONFIG.paymentStatusEnabled === true &&
+    typeof GameChangerPaymentUI.openStatus === 'function'
+  );
+}
+
+function canCheckMemberHitPayPayment(payment) {
+  return (
+    !!payment &&
+    isMemberHitPayTransaction(payment) &&
+    payment.is_sandbox === true &&
+    isMemberPaymentTransactionId(
+      payment.transaction_id
+    ) &&
+    isMemberPaymentOrderReference(
+      payment.order_reference
+    )
+  );
+}
+
+function canRequestMemberHitPayReceipt(payment) {
+  return (
+    canCheckMemberHitPayPayment(payment) &&
+    memberPaymentDisplayStatus(payment) === 'PAID' &&
+    payment.status === 'PAID' &&
+    payment.checkout_state === 'CREATED' &&
+    payment.reconciliation_required === false &&
+    payment.receipt_available === true &&
+    isMemberPaymentTransactionId(
+      payment.registration_id
+    )
+  );
+}
+
+function memberPaymentHistoryActions(payment) {
+  if (!isMemberHitPayTransaction(payment)) {
+    return '<span class="hp-history-note">—</span>';
+  }
+
+  if (!canCheckMemberHitPayPayment(payment)) {
+    return `<span class="hp-history-note">
+      Contact administrator
+    </span>`;
+  }
+
+  const transactionId = payment.transaction_id;
+
+  const disabled = (
+    !memberPaymentStatusServiceReady() ||
+    !ownsMemberPaymentCache() ||
+    !currentMemberPaymentIdentity()
+  )
+    ? ' disabled'
+    : '';
+
+  const receiptButton =
+    canRequestMemberHitPayReceipt(payment)
+      ? `<button
+          type="button"
+          class="btn btn-xs btn-primary"
+          onclick="openMemberHitPayHistoryAction(
+            '${transactionId}', 'receipt'
+          )"${disabled}>
+          View receipt
+        </button>`
+      : '';
+
+  const readinessNote = disabled
+    ? `<div class="hp-history-note">
+        Status service unavailable
+      </div>`
+    : '';
+
+  return `<div class="hp-history-actions">
+
+    <button
+      type="button"
+      class="btn btn-xs btn-ghost"
+      onclick="openMemberHitPayHistoryAction(
+        '${transactionId}', 'status'
+      )"${disabled}>
+      Check status
+    </button>
+
+    ${receiptButton}
+    ${readinessNote}
+
+  </div>`;
+}
+
+
+// Prevent repeated history actions while a status
+// request is being opened.
+
+async function openMemberHitPayHistoryAction(
+  transactionId,
+  action = 'status'
+) {
+  const context = captureMemberPaymentContext();
+
+  if (
+    !context ||
+    !ownsMemberPaymentCache() ||
+    !isMemberPaymentTransactionId(transactionId) ||
+    !['status', 'receipt'].includes(action)
+  ) {
+    return false;
+  }
+
+  if (!memberPaymentStatusServiceReady()) {
+    showToast(
+      'Payment status services are not available yet.',
+      'info',
+      5000
+    );
+
+    return false;
+  }
+
+  if (memberPaymentActiveAction !== null) {
+    return false;
+  }
+
+  const actionId = ++memberPaymentActionGeneration;
+
+  memberPaymentActiveAction = actionId;
+
+  const isCurrent = () =>
+    isCurrentMemberPaymentContext(context) &&
+    ownsMemberPaymentCache() &&
+    memberPaymentActiveAction === actionId;
+
+  try {
+    if (
+      !await verifyMemberPaymentContext(context) ||
+      !isCurrent()
+    ) {
+      return false;
+    }
+
+    const matches = mp().transactions.filter(
+      payment =>
+        payment.transaction_id === transactionId
+    );
+
+    if (matches.length !== 1) {
+      showToast(
+        'Payment record is unavailable. Refresh your payment history.',
+        'info',
+        5000
+      );
+
+      return false;
+    }
+
+    const payment = matches[0];
+
+    if (!canCheckMemberHitPayPayment(payment)) {
+      showToast(
+        'This payment requires administrator assistance.',
+        'info',
+        5000
+      );
+
+      return false;
+    }
+
+    if (
+      action === 'receipt' &&
+      !canRequestMemberHitPayReceipt(payment)
+    ) {
+      showToast(
+        'A verified receipt is not available for this payment.',
+        'info',
+        5000
+      );
+
+      return false;
+    }
+
+    if (
+      !isCurrent() ||
+      !memberPaymentStatusServiceReady()
+    ) {
+      return false;
+    }
+
+    const handled =
+      await GameChangerPaymentUI.openStatus(
+        payment.order_reference
+      );
+
+    if (
+      !isCurrent() ||
+      !await verifyMemberPaymentContext(context) ||
+      !isCurrent()
+    ) {
+      return false;
+    }
+
+    return handled === true;
+
+  } catch (error) {
+    if (isCurrent()) {
+      showToast(
+        'Unable to retrieve payment status. Please try again.',
+        'error',
+        5000
+      );
+    }
+
+    return false;
+
+  } finally {
+    // An older action must never unlock a newer action.
+
+    if (memberPaymentActiveAction === actionId) {
+      memberPaymentActiveAction = null;
+    }
+  }
+}
+
+function renderMemberPaymentHistoryRow(payment) {
+  const status = memberPaymentDisplayStatus(payment);
+
+  const method =
+    payment.status === 'PAID' ||
+    payment.status === 'REFUNDED'
+      ? (
+          CHANNEL_LABEL[payment.channel] ||
+          payment.channel ||
+          '—'
+        )
+      : '—';
+
+  const sandboxNote = isMemberSandboxPayment(payment)
+    ? '<div class="hp-history-note">Test amount</div>'
+    : '';
+
+  const reviewNote = status === 'REVIEW_REQUIRED'
+    ? `<div class="hp-history-note">
+        Contact an administrator before retrying.
+      </div>`
+    : '';
+
+  return `<tr>
+    <td class="nc">
+      ${esc(payment.session || '—')}
+      ${memberPaymentMetadata(payment)}
+    </td>
+
+    <td style="font-weight:700;">
+      ${fmtMoney(memberPaymentAmount(payment.amount))}
+      ${sandboxNote}
+    </td>
+
+    <td>${esc(method)}</td>
+
+    <td>${fmtDate(payment.date)}</td>
+
+    <td>
+      ${memberPaymentReference(payment)}
+    </td>
+
+    <td>
+      ${memberPaymentStatusBadge(payment)}
+      ${reviewNote}
+    </td>
+
+    <td>
+      ${memberPaymentHistoryActions(payment)}
+    </td>
+  </tr>`;
+}
+
+
 function renderMemberPayments() {
-  const tx = mp().transactions || [], regs = mp().registrations || [], loaded = !!memberPayments;
-  const paid = tx.filter(t => t.status === 'PAID').reduce((a, t) => a + Number(t.amount || 0), 0);
+  const loaded = ownsMemberPaymentCache();
+  const tx = mp().transactions || [];
+  const regs = mp().registrations || [];
+  const paid = memberActualPaidTotal(tx);
   const dues = memberDues();
-  const due = dues.reduce((a, r) => a + Number(r.fee || 0), 0);
+  const actualDues = memberActualPaymentDues(dues);
+
+  const due = actualDues.reduce(
+    (a, r) => a + memberPaymentAmount(r.fee),
+    0
+  );
   setText('mpay-paid', loaded ? fmtMoney(paid) : '—');
   setText('mpay-due', loaded ? fmtMoney(due) : '—');
-  setText('mpay-due-lbl', loaded ? `Awaiting Payment (${dues.length})` : 'Awaiting Payment');
+  setText('mpay-due-lbl', loaded ? `Awaiting Payment (${actualDues.length})` : 'Awaiting Payment');
   setText('mpay-count', loaded ? fmtInt(tx.length) : '—');
 
   setHtml('mpay-dues', dues.length ? dues.map(r => {
+
+    if (Number(r.fee) > 0) {
+      const session = (md().upcoming || []).find(
+        s => s.session_id === r.session_id
+      );
+
+      const canPay = !!session &&
+        ['Upcoming', 'Live'].includes(r.session_status) &&
+        Number.isFinite(Date.parse(session.end)) &&
+        Date.parse(session.end) > Date.now();
+
+      return `<div class="m-hitem">
+        <div class="m-hst">₱</div>
+        <div class="m-hi">
+          <h4>${esc(r.session || 'Training session')}</h4>
+          <p>${fmtMoney(r.fee)}</p>
+          <div style="font-size:12px;color:var(--t3);">
+            ${canPay
+              ? 'Complete your admission payment through HitPay. Registration is confirmed after payment verification.'
+              : 'Payment is currently unavailable for this session.'}
+          </div>
+        </div>
+        <div class="m-ha">
+          ${canPay
+            ? `<button class="btn btn-primary btn-xs"
+                onclick="openSessionView('${esc(r.session_id)}')">
+                💳 Pay Now
+              </button>`
+            : '<span class="badge bg-y">Unavailable</span>'}
+        </div>
+      </div>`;
+    }
+
     const pending = r.payment_status === 'PENDING_PAYMENT';
     const note = pending ? `<div style="font-size:12px;color:#B45309;margin-top:3px;">⏳ Sent${r.pending_reference ? ` (Ref ${esc(r.pending_reference)})` : ''} — waiting for an admin to confirm.</div>`
       : r.rejected_reason ? `<div style="font-size:12px;color:var(--red);margin-top:3px;">✗ Your last payment was not accepted: ${esc(r.rejected_reason)} — please submit it again.</div>` : '';
     const btn = memberPayments?.fallback ? '' : `<button class="btn btn-xs ${pending ? 'btn-ghost' : 'btn-primary'}" onclick="openSubmitPayment('${esc(r.session_id)}')">${pending ? 'Edit' : 'Submit payment'}</button>`;
     return `<div class="m-hitem"><div class="m-hst" style="background:var(--yellow-l);color:#B45309;">₱</div><div class="m-hi"><h4>${esc(r.session)}</h4><p>${fmtDate(r.start)} · ${fmtTime(r.start)} · ${fmtMoney(r.fee)}</p>${note}</div><div class="m-ha" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;"><span class="badge ${pending ? 'bg-y' : 'bg-r'}">${pending ? '⏳ Waiting for confirmation' : 'Unpaid'}</span>${btn}</div></div>`;
-  }).join('') + `<div style="font-size:12px;color:var(--t3);margin-top:10px;line-height:1.6;">Pay the admission fee, then press <strong>Submit payment</strong> and enter the reference number from your receipt. Your Zoom link unlocks as soon as an admin confirms it.</div>`
+  }).join('') + `<div style="font-size:12px;color:var(--t3);margin-top:10px;line-height:1.6;">Complete admission payments through HitPay. Your registration and receipt are confirmed automatically after successful payment verification.</div>`
     : emptyState('✅', loaded ? 'Nothing to pay right now.' : 'Loading…'));
 
-  const st = document.getElementById('mpay-status')?.value || '';
-  const q = (document.getElementById('mpay-search')?.value || '').trim().toLowerCase();
-  const list = tx.filter(t => (!st || t.status === st) && (!q || String(t.session || '').toLowerCase().includes(q)));
-  setHtml('mpay-tbody', list.length ? list.map(t => `<tr><td class="nc">${esc(t.session || '—')}</td><td style="font-weight:700;">${fmtMoney(t.amount)}</td><td>${t.status === 'PAID' || t.status === 'REFUNDED' ? esc(CHANNEL_LABEL[t.channel] || t.channel || '—') : '—'}</td><td>${fmtDate(t.date)}</td><td style="font-size:12px;color:var(--t3);">${esc(t.reference || '—')}</td><td>${paymentBadge(t.status)}</td></tr>`).join('')
-    : emptyRow(6, memberPayments?.fallback ? 'Payment history needs the 09_member_payments.sql update in Supabase.' : tx.length ? 'No payments match your filters.' : 'No payments yet.'));
+  const st =
+    document.getElementById('mpay-status')?.value || '';
+
+  const q = (
+    document.getElementById('mpay-search')?.value || ''
+  ).trim().toLowerCase();
+
+  const list = tx.filter(t =>
+    (!st || memberPaymentDisplayStatus(t) === st) &&
+    memberPaymentMatchesSearch(t, q)
+  );
+
+  setHtml(
+    'mpay-tbody',
+    list.length
+      ? list.map(renderMemberPaymentHistoryRow).join('')
+      : emptyRow(
+          7,
+          memberPayments?.fallback
+            ? 'Payment history is currently unavailable.'
+            : !loaded
+              ? 'Loading payment history…'
+              : tx.length
+                ? 'No payments match your filters.'
+                : 'No payments yet.'
+        )
+  );
 }
 
 // ════════════════════════════════════════════════
@@ -2679,8 +4370,40 @@ const NAV_PEEK = {
     return { icon: '📅', title: 'Session and Attendance', body: peekRows([['Upcoming sessions', fmtInt((d.upcoming || []).length)], ['Registered', fmtInt((d.upcoming || []).filter(s => s.is_registered).length)], ['Attended / missed', `${fmtInt(st.attended)} / ${fmtInt(st.missed)}`]]) + (n ? `<div class="pk-note">Next: ${esc(n.title)} · ${fmtDateShort(n.start)} ${fmtTime(n.start)}</div>` : '<div class="pk-note">No upcoming sessions yet.</div>') }; },
   'mn-career': () => { const d = md(), nodes = d.skill_tree || [], act = nodes.filter(x => x.status === 'IN_PROGRESS');
     return { icon: '🗺', title: 'Career Path', body: nodes.length ? peekRows([['Mastery level', d.me?.mastery_level || '—'], ['Completed', `${nodes.filter(x => x.status === 'COMPLETED').length} of ${nodes.length}`, 'ok'], ['In progress', fmtInt(act.length)], ['Locked', fmtInt(nodes.filter(x => x.status === 'LOCKED').length)]]) + (act[0] ? `<div class="pk-note">Working on: ${esc(act[0].title)} · ${Math.round(act[0].progress)}%</div>` : '') : '<div class="pk-note">Your career path will appear here once it is set up.</div>' }; },
-  'mn-payments': () => { const tx = mp().transactions || [], dues = memberDues();
-    return { icon: '💳', title: 'Payment', body: peekRows([['Awaiting payment', dues.length ? `${dues.length} · ${fmtMoney(dues.reduce((a, r) => a + Number(r.fee || 0), 0))}` : 'None', dues.length ? 'warn' : 'ok'], ['Total paid', fmtMoney(tx.filter(t => t.status === 'PAID').reduce((a, t) => a + Number(t.amount || 0), 0))], ['Transactions', fmtInt(tx.length)]]) }; },
+  'mn-payments': () => {
+    const tx = mp().transactions || [];
+
+    const dues = memberActualPaymentDues(
+      memberDues()
+    );
+
+    const due = dues.reduce(
+      (a, r) => a + memberPaymentAmount(r.fee),
+      0
+    );
+
+    return {
+      icon: '💳',
+      title: 'Payment',
+      body: peekRows([
+        [
+          'Awaiting payment',
+          dues.length
+            ? `${dues.length} · ${fmtMoney(due)}`
+            : 'None',
+          dues.length ? 'warn' : 'ok'
+        ],
+        [
+          'Total paid',
+          fmtMoney(memberActualPaidTotal(tx))
+        ],
+        [
+          'Transactions',
+          fmtInt(tx.length)
+        ]
+      ])
+    };
+  },
   'mn-certificates': () => { const c = md().certificates || [];
     return { icon: '🏆', title: 'Certificate', body: peekRows([['Earned', fmtInt(c.length)], ['Being prepared', fmtInt(c.filter(x => x.status !== 'ISSUED').length)]]) + (c[0] ? `<div class="pk-note">Latest: ${esc(c[0].title)} · ${fmtDateShort(c[0].issued_at)}</div>` : '<div class="pk-note">Attend ≥80% of a session to earn one.</div>') }; },
   // ── admin / super admin
@@ -2832,7 +4555,11 @@ function reportScope() {
   const provOf = new Map(people.map(m => [m.user_id, m.province]));
   const provByEmail = new Map(people.filter(m => m.email).map(m => [String(m.email).toLowerCase(), m.province]));
   let regs = (d.registrations || []).filter(r => ids.has(r.session_id));
-  let pays = (d.payments || []).filter(p => ids.has(p.session_id));
+  // HITPAY_REPORT_REVENUE_PROTECTION_V1
+  let pays = (d.payments || []).filter(p =>
+    ids.has(p.session_id) &&
+    !adminPaymentIsSandbox(p)
+  );
   if (prov) {
     regs = regs.filter(r => provOf.get(r.user_id) === prov);
     pays = pays.filter(p => provByEmail.get(String(p.email || '').toLowerCase()) === prov);
@@ -3211,20 +4938,165 @@ async function saveEditMember() {
 // EXPORT — builds a CSV file from the data on screen
 // ════════════════════════════════════════════════
 function downloadCSV(filename, headers, rows) {
-  const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const cell = v => {
+    let s = String(v ?? '');
+
+    if (
+      typeof v !== 'number' &&
+      (/^[\s\uFEFF]*[=+\-@＝＋－＠]/u.test(s) ||
+       /^[\t\r\n]/.test(s))
+    ) {
+      s = "'" + s;
+    }
+
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
   const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(cell).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: filename });
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+function safeMemberPaymentCSVValue(value) {
+  if (
+    typeof value === 'number' &&
+    Number.isFinite(value)
+  ) {
+    return value;
+  }
+
+  const text = String(value ?? '');
+
+  // Protect text cells from spreadsheet formula
+  // interpretation, including leading whitespace.
+
+  if (
+    /^[\s\uFEFF]*[=+\-@＝＋－＠]/u.test(text) ||
+    /^[\t\r\n]/.test(text)
+  ) {
+    return "'" + text;
+  }
+
+  return text;
+}
+
+async function exportOwnedMemberPayments() {
+  const context = captureMemberPaymentContext();
+
+  if (
+    !context ||
+    !ownsMemberPaymentCache() ||
+    memberPayments?.fallback
+  ) {
+    showToast(
+      'Payment history is not available for export.',
+      'info'
+    );
+
+    return false;
+  }
+
+  if (
+    !await verifyMemberPaymentContext(context) ||
+    !ownsMemberPaymentCache()
+  ) {
+    return false;
+  }
+
+  const transactions = mp().transactions;
+
+  if (!transactions.length) {
+    showToast(
+      'There is no data to export yet.',
+      'info'
+    );
+
+    return false;
+  }
+
+  const headers = [
+    'Session',
+    'Amount',
+    'Method',
+    'Date',
+    'Reference',
+    'Status',
+    'Currency',
+    'Payment Provider',
+    'Environment',
+    'Order Reference',
+    'Reconciliation Required'
+  ];
+
+  const rows = transactions.map(t => {
+    const sandbox = isMemberSandboxPayment(t);
+
+    const provider = isMemberHitPayTransaction(t)
+      ? 'HitPay'
+      : t.payment_provider || 'Legacy';
+
+    const environment = sandbox
+      ? 'SANDBOX - TEST ONLY'
+      : isMemberHitPayTransaction(t)
+        ? 'UNCONFIRMED'
+        : 'ORDINARY';
+
+    return [
+      t.session || '',
+      memberPaymentAmount(t.amount),
+      CHANNEL_LABEL[t.channel] || t.channel || '',
+      fmtDate(t.date),
+      t.reference || '',
+      memberPaymentDisplayStatus(t),
+      t.currency || '',
+      provider,
+      environment,
+      t.order_reference || '',
+      memberPaymentDisplayStatus(t) ===
+        'REVIEW_REQUIRED'
+          ? 'Yes'
+          : 'No'
+    ].map(safeMemberPaymentCSVValue);
+  });
+
+  if (
+    !isCurrentMemberPaymentContext(context) ||
+    !ownsMemberPaymentCache()
+  ) {
+    return false;
+  }
+
+  const today =
+    new Date().toISOString().slice(0, 10);
+
+  downloadCSV(
+    `my-payments-${today}.csv`,
+    headers,
+    rows
+  );
+
+  showToast(
+    `Exported ${rows.length} payment record(s).`,
+    'success'
+  );
+
+  return true;
+}
+
+
 function handleExport(what) {
   const today = new Date().toISOString().slice(0, 10);
   let file, headers, rows;
   if (what === 'my payments') {
-    file = `my-payments-${today}.csv`;
-    headers = ['Session', 'Amount', 'Method', 'Date', 'Reference', 'Status'];
-    rows = (mp().transactions || []).map(t => [t.session, t.amount, CHANNEL_LABEL[t.channel] || t.channel, fmtDate(t.date), t.reference || '', t.status]);
+    return exportOwnedMemberPayments().catch(() => {
+      showToast(
+        'Unable to export payment records.',
+        'error'
+      );
+
+      return false;
+    });
   } else if (what === 'attendance history' || what === 'all attendance records') {
     file = `my-attendance-${today}.csv`;
     headers = ['Session', 'Date', 'Area', 'Duration (min)', 'Attendance %', 'Status', 'Certificate'];
@@ -3234,9 +5106,39 @@ function handleExport(what) {
     headers = ['Member ID', 'Name', 'Email', 'Province', 'Expertise', 'Company', 'Position', 'Level', 'Status', 'Attendance %', 'Certificates', 'Registered'];
     rows = filteredMembers().map(m => [m.member_id, m.full_name, m.email, m.province, m.expertise, m.company, m.position, m.level, m.status, m.attendance?.rate ?? '', m.certificates, fmtDate(m.registered_at)]);
   } else if (what === 'payments Excel') {
+    if (!ownsAdminPaymentRecords()) {
+      showToast('Payment records are unavailable.', 'error');
+      return;
+    }
+
     file = `payments-${today}.csv`;
-    headers = ['Member', 'Email', 'Session', 'Amount', 'Method', 'Date', 'Status', 'Reference'];
-    rows = filteredPayments().map(p => [p.member, p.email, p.session, p.amount, CHANNEL_LABEL[p.channel] || p.channel, fmtDate(p.date), p.status, p.hitpay_ref || p.order_ref || '']);
+
+    headers = [
+      'Member', 'Email', 'Session', 'Amount',
+      'Currency', 'Method', 'Date', 'Status',
+      'Reference', 'Provider', 'Environment',
+      'Reconciliation Required', 'Receipt Available'
+    ];
+
+    rows = filteredPayments().map(p => [
+      p.member,
+      p.email,
+      p.session,
+      adminPaymentAmount(p),
+      p.currency || 'PHP',
+      CHANNEL_LABEL[p.channel] || p.channel,
+      fmtDate(p.date),
+      adminPaymentDisplayStatus(p),
+      adminPaymentReference(p),
+      p.payment_provider || 'Legacy',
+      adminPaymentIsSandbox(p)
+        ? 'SANDBOX - TEST ONLY'
+        : 'ORDINARY',
+      adminPaymentDisplayStatus(p) === 'REVIEW_REQUIRED'
+        ? 'Yes' : 'No',
+      adminPaymentReceiptAvailable(p)
+        ? 'Yes' : 'No'
+    ]);
   } else if (what === 'monthly report') {
     file = `monthly-report-${today}.csv`;
     headers = ['Month', 'Sessions', 'Attendees', 'Certificates', 'Revenue', 'Avg Attendance %'];

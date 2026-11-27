@@ -1,6 +1,6 @@
 {
   "framework": null,
   "installCommand": "",
-  "buildCommand": "",
-  "outputDirectory": "."
+  "buildCommand": "node build-static.cjs",
+  "outputDirectory": "dist"
 }

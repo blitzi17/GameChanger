@@ -1,0 +1,14 @@
+[functions.create-payment]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/create-payment/index.ts"
+
+[functions.hitpay-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/hitpay-webhook/index.ts"
+
+[functions.payment-status]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/payment-status/index.ts"
