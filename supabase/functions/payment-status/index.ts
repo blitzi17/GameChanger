@@ -1,4 +1,7 @@
-import { getVerifiedHitPayStatus } from "../_shared/hitpay-status.ts";
+import {
+  getVerifiedHitPayStatus,
+  canResumeHitPayCheckout,
+} from "../_shared/hitpay-status.ts";
 import { validateHitPayCheckoutURL } from "../_shared/hitpay.ts";
 
 import { createAdminClient, createMemberClient } from "../_shared/supabase.ts";
@@ -524,15 +527,7 @@ Deno.serve(async (req: Request) => {
         });
 
         const canContinue =
-          gateway.status === "pending" &&
-          gateway.paymentDetailsAvailable &&
-          gateway.successfulPaymentCount === 0 &&
-          gateway.payments.every((attempt) =>
-            typeof attempt.status === "string" &&
-            ["failed", "canceled", "cancelled"].includes(
-              attempt.status.trim().toLowerCase()
-            )
-          );
+          canResumeHitPayCheckout(gateway);
 
         if (canContinue) {
 

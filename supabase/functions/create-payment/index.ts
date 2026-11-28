@@ -1,4 +1,7 @@
-import { getVerifiedHitPayStatus } from "../_shared/hitpay-status.ts";
+import {
+  getVerifiedHitPayStatus,
+  canResumeHitPayCheckout,
+} from "../_shared/hitpay-status.ts";
 import {
   validateHitPayCheckoutURL as validateRecoveryCheckoutURL,
 } from "../_shared/hitpay.ts";
@@ -498,17 +501,7 @@ Deno.serve(async (req: Request) => {
         // Only resume the same verified pending request.
         // Never create a replacement request here.
 
-        if (
-          gateway.status !== "pending" ||
-          !gateway.paymentDetailsAvailable ||
-          gateway.successfulPaymentCount !== 0 ||
-          !gateway.payments.every((payment) =>
-            typeof payment.status === "string" &&
-            ["failed", "canceled", "cancelled"].includes(
-              payment.status.trim().toLowerCase()
-            )
-          )
-        ) {
+        if (!canResumeHitPayCheckout(gateway)) {
           return pendingResponse(
             "This checkout requires payment verification. Check your payment status before continuing."
           );

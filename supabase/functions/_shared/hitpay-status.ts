@@ -160,3 +160,26 @@ export async function getVerifiedHitPayStatus(
     successfulPaymentCount,
   };
 }
+
+
+/**
+ * HITPAY_SHARED_CONTINUATION_POLICY_V1
+ *
+ * HitPay engineering confirmed that a pending payment
+ * request can resume through its existing checkout URL.
+ *
+ * Individual attempt statuses do not determine whether
+ * the same payment request can be reopened.
+ *
+ * This policy never authorizes a replacement request
+ * or marks a transaction as paid.
+ */
+export function canResumeHitPayCheckout(
+  gateway: HitPayVerifiedStatus
+): boolean {
+  return (
+    gateway.status === "pending" &&
+    gateway.paymentDetailsAvailable === true &&
+    gateway.successfulPaymentCount === 0
+  );
+}
