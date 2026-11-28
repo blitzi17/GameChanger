@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Supabase CLI temporary files
+supabase/.temp/
+
+# Local backup of deployed Zoom diagnostic v1
+/zoom-diagnostic-v1-backup/
+
+# Local read-only backup of the deployed Zoom function
+/zoom-v8-review/
+
+# Old Zoom diagnostic planning file
+/supabase/zoom_participant_diagnostic.ts
+# Local Zoom development artifacts
+/zoom-diagnostic-v5-review/
+/zoom-v10-review/
+/upabase.tempproject-ref
+/.vscode/settings.json

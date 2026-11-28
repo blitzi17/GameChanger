@@ -1,0 +1,5 @@
+
+# GameChanger Supabase Edge Function configuration
+
+[functions.member-zoom]
+verify_jwt = true

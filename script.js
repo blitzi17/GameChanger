@@ -1342,7 +1342,7 @@ async function registerForSession(sessionId, btn) {
   try {
     const r = await rpc('member_register_session', { p_session: sessionId });
     if (r.status === 'already registered') showToast("You're already registered for this session.", 'info');
-    else if (r.free) showToast("You're registered! The Zoom link is now available.", 'success', 4500);
+    else if (r.free) showToast("You're registered! Open Join options when Zoom access is ready.", 'success', 4500);
     else showToast(`Registered! Pay the ${fmtMoney(r.fee)} fee and submit your reference number to unlock the Zoom link.`, 'success', 6000);
     await Promise.all([loadMemberData(), loadMemberPayments()]);
     if (!r.free && r.status !== 'already registered') openSubmitPayment(sessionId);
@@ -1377,10 +1377,11 @@ function openSessionView(sessionId) {
   let footer = `<button class="btn btn-ghost" onclick="closeMo('m-session-view')">← Back</button>`;
   if (s.is_registered) {
     note.style.display = 'block'; note.style.background = 'var(--green-l)'; note.style.color = 'var(--green)';
-    note.textContent = zoomReady(s) ? "You're registered. The Join button opens 15 minutes before the session starts."
-      : s.payment_status === 'PENDING_PAYMENT' ? "You're registered. Your payment is waiting for an admin to confirm it — the Zoom link unlocks after that."
-      : "You're registered. Pay the admission fee and submit your reference number to unlock the Zoom link.";
-    if (!zoomReady(s) && s.payment_status !== 'PENDING_PAYMENT' && Number(s.fee) > 0) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment</button>`;
+    note.textContent = zoomReady(s) ? "You're registered. Open Join options to prepare for the meeting. Joining opens 15 minutes before the start."
+      : s.payment_status === 'PENDING_PAYMENT' ? "You're registered. Your payment is waiting for confirmation."
+      : zoomPaymentNeeded(s) ? "You're registered. Complete payment to unlock Zoom access."
+      : "You're registered. Zoom access is not ready yet.";
+    if (zoomPaymentNeeded(s) && s.payment_status !== 'PENDING_PAYMENT') footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment</button>`;
     if (zoomReady(s)) footer += `<button class="btn btn-primary" onclick="closeMo('m-session-view');openJoinModal('${esc(s.session_id)}')">🎯 Join options</button>`;
   } else if (full) {
     note.style.display = 'block'; note.style.background = 'var(--red-l)'; note.style.color = 'var(--red-d)';
@@ -1407,40 +1408,81 @@ function openJoinModal(sessionId) {
   let footer;
   if (!s.is_registered) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');registerForSession('${esc(s.session_id)}')">+ Register</button>`;
   else if (!zoomReady(s) && s.payment_status === 'PENDING_PAYMENT') footer = `<span class="badge bg-y">⏳ Payment sent — waiting for confirmation</span>`;
-  else if (!zoomReady(s) && Number(s.fee) > 0) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment to unlock Zoom</button>`;
+  else if (!zoomReady(s) && zoomPaymentNeeded(s)) footer = `<button class="btn btn-primary" onclick="closeMo('m-join-modal');openSubmitPayment('${esc(s.session_id)}')">💳 Submit payment to unlock Zoom</button>`;
   else if (!zoomReady(s)) footer = `<span class="badge bg-y">⏳ The Zoom link isn't ready yet</span>`;
   else if (live) footer = `<button class="btn btn-primary" onclick="handleJoinSession('${esc(s.session_id)}', this)">🚀 Join Now</button>`;
+  else if (Date.now() >= new Date(s.end).getTime()) footer = `<span class="badge bg-gr">Session ended</span>`;
   else footer = `<span class="badge bg-b">🔒 Join opens 15 minutes before the scheduled start</span>`;
+  if (zoomReady(s) && s.zoom_verified === true && Date.now() < new Date(s.end).getTime()) {
+    footer = `<button class="btn btn-outline" onclick="prepareMemberZoom('${esc(s.session_id)}', this)">Prepare Zoom registration</button>` + footer;
+  }
   setHtml('m-join-footer', footer + `<button class="btn btn-ghost" onclick="closeMo('m-join-modal')">Close</button>`);
   openMo('m-join-modal');
 }
 // The Zoom link stays on the server until the start time (15_join_lock.sql);
 // it is only handed out when the member presses Join during the session.
-function zoomReady(s) { return s.zoom_ready !== undefined ? !!s.zoom_ready : !!s.zoom_join_url; }
+function zoomReady(s) { return s.zoom_ready === true; }
+function zoomPaymentNeeded(s) {
+  return Number(s.fee) > 0 && ['UNPAID', 'PENDING_PAYMENT'].includes(s.payment_status);
+}
+async function memberZoomRequest(action, sessionId) {
+  const { data, error } = await sb.functions.invoke('member-zoom', {
+    body: { action, session_id: sessionId }
+  });
+  if (error) {
+    let code = '';
+    try { code = (await error.context.json()).error || ''; } catch (_) { /* no JSON */ }
+    const messages = {
+      join_too_early: 'Joining opens 15 minutes before the scheduled start.',
+      access_denied: 'Zoom access is not available for your account or session. Refresh your dashboard and contact the admin if needed.',
+      registration_unavailable: 'Zoom registration is already being processed or is unavailable. Please try again later.',
+      registration_review_required: 'Zoom registration requires administrator review. Please contact the admin.',
+      unauthorized: 'Please sign in again.'
+    };
+    throw new Error(messages[code] || 'Zoom access could not be confirmed. Please try again or contact the admin.');
+  }
+  return data;
+}
+async function prepareMemberZoom(sessionId, btn) {
+  const s = (md().upcoming || []).find(x => x.session_id === sessionId);
+  if (!s || !s.is_registered || !zoomReady(s) || s.zoom_verified !== true) return;
+  const uid = loggedInUser?.uid;
+  const original = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+  try {
+    const r = await memberZoomRequest('register', sessionId);
+    if (!uid || loggedInUser?.uid !== uid) return;
+    if (r?.registered !== true) throw new Error('Zoom registration could not be confirmed.');
+    showToast('Your individual Zoom registration is ready. Use Join Now when the joining window opens.', 'success', 6000);
+  } catch (e) {
+    showToast(e.message || 'Zoom registration failed.', 'error', 6000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = original; }
+  }
+}
 async function handleJoinSession(sessionId, btn) {
   const s = (md().upcoming || []).find(x => x.session_id === sessionId);
-  if (!s || !zoomReady(s)) { showToast('The Zoom link is not available yet.', 'info'); return; }
-    if (Date.now() < new Date(s.start).getTime() - 15 * 60 * 1000) {
-    showToast('Joining opens 15 minutes before the scheduled start.', 'info', 5000);
-    return;
-  }
-  let url = s.zoom_join_url;                               // only present if 15_join_lock.sql hasn't been run
-  if (!url) {
-    const tab = window.open('', '_blank');                 // open first — browsers block tabs opened after waiting
-    if (tab) { try { tab.document.write('<p style="font-family:sans-serif;padding:24px;">Opening Zoom…</p>'); } catch (_) { /* ignore */ } }
-    if (btn) btn.disabled = true;
-    try {
-      const r = await rpc('member_join_link', { p_session: sessionId });
-      url = r && r.url;
-      if (!/^https:\/\//i.test(url || '')) throw new Error('The Zoom link for this session is not valid. Please tell the admin.');
-      if (tab) tab.location.href = url; else window.location.href = url;
-    } catch (e) {
-      if (tab) tab.close();
-      showToast(friendlyAuthError(e), 'error', 6000);
-      return;
-    } finally { if (btn) btn.disabled = false; }
-  } else window.open(url, '_blank', 'noopener');
-  closeMo('m-join-modal');
+  if (!s || !s.is_registered || !zoomReady(s)) { showToast('The Zoom link is not available yet.', 'info'); return; }
+  if (typeof s.zoom_verified !== 'boolean') { showToast('Zoom access information is unavailable. Refresh your dashboard.', 'error'); return; }
+  const now = Date.now(), start = new Date(s.start).getTime(), end = new Date(s.end).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || now >= end) { showToast('This session is no longer available.', 'info'); return; }
+  if (now < start - 15 * 60 * 1000) { showToast('Joining opens 15 minutes before the scheduled start.', 'info', 5000); return; }
+  const uid = loggedInUser?.uid;
+  const tab = window.open('', '_blank');
+  if (tab) { try { tab.opener = null; tab.document.write('<p style="font-family:sans-serif;padding:24px;">Opening Zoom…</p>'); } catch (_) { /* ignore */ } }
+  if (btn) btn.disabled = true;
+  try {
+    const r = s.zoom_verified ? await memberZoomRequest('join', sessionId) : await rpc('member_join_link', { p_session: sessionId });
+    if (!uid || loggedInUser?.uid !== uid) throw new Error('Your sign-in session changed. Please try again.');
+    const url = s.zoom_verified ? (r?.status === 'ready' ? r.join_url : null) : r?.url;
+    const target = new URL(url || '');
+    if (target.protocol !== 'https:' || target.username || target.password || (s.zoom_verified && (!/^(zoom\.us|us[0-9]+web\.zoom\.us)$/i.test(target.hostname) || target.port))) throw new Error('Invalid Zoom link. Please contact the admin.');
+    if (tab) tab.location.href = target.href; else window.location.href = target.href;
+    closeMo('m-join-modal');
+  } catch (e) {
+    if (tab) tab.close();
+    showToast(e.message || 'Zoom access could not be confirmed.', 'error', 6000);
+  } finally { if (btn) btn.disabled = false; }
 }
 function stopCountdown() {
   if (countdownTimer) clearInterval(countdownTimer);
@@ -1898,9 +1940,9 @@ async function startZoomAsHost(sessionId, btn) {
   const orig = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Opening…'; }
   const z = await zoomCall('host_link', sessionId);
-  const url = z.ok && z.data.url ? z.data.url : s.zoom_join_url;
+  const url = z.ok ? z.data.url : null;
   if (btn) { btn.disabled = false; btn.textContent = orig; }
-  if (!/^https:\/\//i.test(url)) { if (tab) tab.close(); showToast('This session\'s Zoom link is not valid. Open Edit and click Regenerate.', 'error', 6000); return; }
+  if (!/^https:\/\//i.test(url || '')) { if (tab) tab.close(); showToast(z.reason || 'The server did not authorize a Zoom link.', 'error', 6000); return; }
   if (tab) tab.location.href = url; else window.location.href = url;
   if (!(z.ok && z.data.status === 'host')) showToast('Opened the join link. To be the host, sign in to Zoom with the account that owns the meeting.', 'info', 6000);
   logAdminAction('Opened Zoom meeting', s.title, { session_id: sessionId });
@@ -2037,7 +2079,8 @@ async function handleCancelSession(sessionId) {
     await rpc('admin_set_session_status', { p_id: sessionId, p_status: 'Cancelled' });
     logAdminAction('Cancelled session', s.title, { session_id: sessionId });
     showToast(`"${s.title}" cancelled.`, 'error');
-    zoomCall('delete_meeting', sessionId);                 // best effort; nothing to do if Zoom isn't connected
+    const z = await zoomCall('delete_meeting', sessionId);
+    if (!z.ok) showToast('Session cancelled, but Zoom cleanup needs administrator review. ' + z.reason, 'error', 10000);
     await loadAdminData();
   } catch (e) { showToast(friendlyAuthError(e), 'error', 5000); }
 }
@@ -2045,7 +2088,7 @@ async function handleDeleteDraft(sessionId) {
   const s = (ad().sessions || []).find(x => x.session_id === sessionId); if (!s) return;
   if (!confirm(`Delete the draft "${s.title}"? This cannot be undone.`)) return;
   try {
-    if (s.zoom_join_url) await zoomCall('delete_meeting', sessionId);   // remove its Zoom meeting too
+    if (s.zoom_join_url) { showToast('This draft has a Zoom meeting. Administrator reconciliation is required before deleting it.', 'error', 8000); return; }
     await rpc('admin_delete_session', { p_id: sessionId });
     logAdminAction('Deleted session draft', s.title, { session_id: sessionId });
     showToast('Draft deleted.', 'error');
@@ -2064,14 +2107,37 @@ function renderSyncSelect() {
   if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
 }
 // The attendance log shown after a sync: every registered member, whether Zoom saw them or not
+function attendancePercent(value) {
+  return value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toFixed(2) + '%';
+}
+const attendanceSyncInFlight = new Set();
+async function syncSavedOrFetchAttendance(id) {
+  const before = await rpc('admin_session_attendance', { p_session: id });
+  let note = '', imported = false;
+  if (!Number(before?.log_count)) {
+    const z = await zoomCall('sync_attendance', id);
+    imported = z.ok && z.data.status === 'imported';
+    if (!z.ok) note = z.reason || 'Zoom import could not be confirmed.';
+    else if (z.data.status === 'no_meeting') note = 'No Zoom meeting is linked to this session.';
+    else if (z.data.status === 'no_report') note = 'No Zoom participant report is available yet.';
+    else if (!imported) note = 'Unexpected Zoom import response.';
+    if (!imported) {
+      // A concurrent import or a lost response may already have saved evidence.
+      const after = await rpc('admin_session_attendance', { p_session: id });
+      if (!Number(after?.log_count)) return { result: { no_logs: true }, log: after, note, imported: false };
+    }
+  } else note = 'Previously saved attendance records were used.';
+  const result = await rpc('admin_sync_attendance', { p_session: id });
+  return { result, log: await rpc('admin_session_attendance', { p_session: id }), note, imported };
+}
 function attendanceLogHtml(log) {
   const regs = (log && log.registrants) || [], un = (log && log.unmatched) || [];
-  const badge = r => ({ ATTENDED: '<span class="badge bg-g">✓ Attended ≥80%</span>', INCOMPLETE: '<span class="badge bg-y">Below 80%</span>', ABSENT: '<span class="badge bg-r">Absent</span>' }[r.attendance_status] || '<span class="badge bg-gr">Awaiting Zoom data</span>');
+  const badge = r => ({ ATTENDED: '<span class="badge bg-g">✓ Attendance approved</span>', INCOMPLETE: '<span class="badge bg-y">Below 80%</span>', ABSENT: '<span class="badge bg-r">Absent</span>' }[r.attendance_status] || '<span class="badge bg-gr">Pending review / Zoom data</span>');
   return `<div style="font-family:var(--font-h);font-size:13px;font-weight:700;margin:14px 0 6px;">📋 Attendance log — ${regs.length} registered member${regs.length === 1 ? '' : 's'}</div>
     <div style="overflow-x:auto;background:white;border:1px solid var(--border);border-radius:var(--r2);"><table class="dt"><thead><tr><th>Member</th><th>Email</th><th>Payment</th><th>In Zoom report</th><th>Attendance</th><th>Result</th></tr></thead><tbody>
-    ${regs.length ? regs.map(r => `<tr><td class="nc">${esc(r.member || '—')}</td><td style="font-size:12px;color:var(--t3);">${esc(r.email || '')}</td><td>${esc((REG_PAY_LABEL[r.payment_status] || ['', r.payment_status || '—'])[1])}</td><td>${r.in_zoom ? '✓ Yes' : '—'}</td><td>${r.attendance_pct == null ? '—' : Math.round(r.attendance_pct) + '%'}</td><td>${badge(r)}</td></tr>`).join('') : emptyRow(6, 'No members have registered for this session.')}
+    ${regs.length ? regs.map(r => `<tr><td class="nc">${esc(r.member || '—')}</td><td style="font-size:12px;color:var(--t3);">${esc(r.email || '')}</td><td>${esc((REG_PAY_LABEL[r.payment_status] || ['', r.payment_status || '—'])[1])}</td><td>${r.in_zoom ? '✓ Yes' : '—'}</td><td>${r.attendance_pct == null ? '—' : attendancePercent(r.attendance_pct)}</td><td>${badge(r)}</td></tr>`).join('') : emptyRow(6, 'No members have registered for this session.')}
     </tbody></table></div>
-    ${un.length ? `<div style="font-size:12px;color:var(--t2);margin-top:8px;">❔ In the Zoom report but not matched to a member account: ${un.map(u => esc(u.email || 'no email')).join(', ')}</div>` : ''}`;
+    ${un.length ? `<div style="font-size:12px;color:var(--t2);margin-top:8px;">❔ In the Zoom report but not matched to an eligible member account (review required): ${un.map(u => esc(u.email || 'no email')).join(', ')}</div>` : ''}`;
 }
 async function aSyncAttendance() {
   const id = document.getElementById('a-sync-session').value;
@@ -2079,6 +2145,8 @@ async function aSyncAttendance() {
   if (!id) { showToast('Select a session first.', 'info'); return; }
   const s = (ad().sessions || []).find(x => x.session_id === id);
   const btn = document.getElementById('a-sync-btn'); const orig = btn.textContent;
+  if (attendanceSyncInFlight.has(id)) { showToast('Attendance sync is already running.', 'info'); return; }
+  attendanceSyncInFlight.add(id);
   btn.textContent = '⏳ Syncing...'; btn.disabled = true;
   const dismiss = `<button class="btn btn-ghost btn-sm" onclick="document.getElementById('a-sync-res').classList.remove('show')">Dismiss</button>`;
   const warn = (title, text, log) => {
@@ -2086,29 +2154,22 @@ async function aSyncAttendance() {
     box.innerHTML = `<div style="font-family:var(--font-h);font-size:13px;font-weight:700;color:#B45309;margin-bottom:7px;">${title}</div><div style="font-size:13px;color:var(--t2);line-height:1.6;">${text}</div>${log ? attendanceLogHtml(log) : ''}<div style="margin-top:11px;">${dismiss}</div>`;
   };
   try {
-    const getLog = async () => { try { return await rpc('admin_session_attendance', { p_session: id }); } catch (_) { return null; } };
-    if (s && new Date(s.start) > Date.now()) {
-      warn('This session hasn\'t started yet', `"${esc(s.title)}" starts ${fmtDate(s.start)} at ${fmtTime(s.start)}. Zoom attendance can be synced after the session ends.`, await getLog());
+    const end = Date.parse(s?.end);
+    if (!s || !['Upcoming', 'Live', 'Completed'].includes(s.status) || !Number.isFinite(end) || end > Date.now()) {
+      warn('Session not ready', 'Attendance can only be synced after an eligible session ends.', null);
       box.classList.add('show');
       return;
     }
-    // 1) pull the participant report from Zoom into attendance_logs
-    const z = await zoomCall('sync_attendance', id);
-    let zoomNote = '';
-    if (!z.ok) zoomNote = z.code === 'not_configured' ? 'Zoom is not connected yet, so attendance can\'t be pulled automatically (see ZOOM_SETUP.md).' : `Zoom could not be reached: ${esc(z.reason)}`;
-    else if (z.data.status === 'no_meeting') zoomNote = 'This session has no Zoom meeting created by the system, so there is no report to pull.';
-    else if (z.data.status === 'no_report') zoomNote = 'Zoom has no participant report for this meeting yet. Reports are ready a few minutes after the meeting ends — if nobody joined, there is nothing to report.';
-    // 2) match it against the registrations
-    const r = await rpc('admin_sync_attendance', { p_session: id });
-    const log = await getLog();
+    const { result: r, log, note } = await syncSavedOrFetchAttendance(id);
+    const zoomNote = esc(note);
     if (r.no_logs) {
       warn('No Zoom attendance found', `${zoomNote || 'There are no Zoom attendance records for this session yet.'}<br>The registered members are listed below — nothing was changed.`, log);
     } else {
       box.style.background = ''; box.style.borderColor = '';
       box.innerHTML = `<div style="font-family:var(--font-h);font-size:13px;font-weight:700;color:var(--green);margin-bottom:7px;">✅ Attendance synced — ${esc(s?.title)}</div>
-        <div style="font-size:13px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>👥 <strong>Zoom attendees:</strong> ${fmtInt(r.attendees)}</div><div>✅ <strong>Qualified (≥80%):</strong> ${fmtInt(r.qualified)} member(s)</div><div>❌ <strong>Below threshold / absent:</strong> ${fmtInt(r.below)} member(s)</div>${Number(r.unmatched) ? `<div>❔ <strong>Zoom rows not matched to an account:</strong> ${fmtInt(r.unmatched)}</div>` : ''}${zoomNote ? `<div style="color:#B45309;">ℹ ${zoomNote} Existing records were used.</div>` : ''}</div>
+        <div style="font-size:13px;color:var(--t2);display:flex;flex-direction:column;gap:3px;"><div>👥 <strong>Zoom report rows:</strong> ${fmtInt(r.attendees)}</div><div>✅ <strong>Approved attendance:</strong> ${fmtInt(r.qualified)} member(s)</div><div>❌ <strong>Incomplete / absent:</strong> ${fmtInt(r.below)} member(s)</div>${Number(r.pending_review) ? `<div>Pending review: ${fmtInt(r.pending_review)}</div>` : ''}${Number(r.unmatched) ? `<div>❔ <strong>Zoom rows not matched to an account:</strong> ${fmtInt(r.unmatched)}</div>` : ''}${zoomNote ? `<div style="color:#B45309;">ℹ ${zoomNote}</div>` : ''}</div>
         ${attendanceLogHtml(log)}
-        <div style="margin-top:11px;display:flex;gap:7px;">${Number(r.needs_certs) ? `<button class="btn btn-green btn-sm" onclick="handleGenerateCertificates('${esc(id)}')">Generate ${fmtInt(r.needs_certs)} Certificate${r.needs_certs == 1 ? '' : 's'}</button>` : ''}${dismiss}</div>`;
+        <div style="margin-top:11px;display:flex;gap:7px;">${Number(r.needs_certs) ? `<button class="btn btn-green btn-sm" onclick="handleGenerateCertificates('${esc(id)}')">Check &amp; Generate Certificates</button>` : ''}${dismiss}</div>`;
       logAdminAction('Synced Zoom attendance', s?.title, r);
     }
     box.classList.add('show');
@@ -2116,6 +2177,7 @@ async function aSyncAttendance() {
   } catch (e) {
     showToast(friendlyAuthError(e), 'error', 5000);
   } finally {
+    attendanceSyncInFlight.delete(id);
     btn.textContent = orig; btn.disabled = false;
   }
 }
@@ -2124,7 +2186,7 @@ async function handleGenerateCertificates(sessionId) {
   try {
     const n = await rpc('admin_generate_certificates', { p_session: sessionId });
     logAdminAction('Generated certificates', s?.title, { count: n, session_id: sessionId });
-    showToast(n ? `🎉 ${n} certificate${n === 1 ? '' : 's'} created.` : 'Every qualified member already has a certificate.', 'success', 4000);
+    showToast(n ? `🎉 ${n} certificate${n === 1 ? '' : 's'} created.` : 'No new eligible certificates found. Review attendance evidence if needed.', 'success', 4000);
     document.getElementById('a-sync-res').classList.remove('show');
     await loadAdminData();
   } catch (e) { showToast(friendlyAuthError(e), 'error', 5000); }
@@ -2135,26 +2197,27 @@ function renderAdminCertificates() {
   setHtml('a-cert-minis', sessions.length ? sessions.slice(0, 8).map(s => {
     const a = areaStyle(s.area);
     const has = Number(s.certs) > 0;
-    return `<div class="cert-mini" style="background:${has ? a.grad : 'linear-gradient(135deg,#B71C1C,#E53935)'};" onclick="${has ? `openCertTemplate('${esc(s.session_id)}')` : `handlePendingCert('${esc(s.session_id)}')`}"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">${has ? a.seal : '⏳'}</div><div class="cmit">${esc(s.title)}</div><div style="font-size:10px;opacity:.7;margin-top:2px;">${has ? fmtInt(s.certs) + ' issued' : (Number(s.log_count) ? 'Ready to generate' : 'Awaiting Sync')}</div></div></div>`;
+    return `<div class="cert-mini" style="background:${has ? a.grad : 'linear-gradient(135deg,#B71C1C,#E53935)'};" onclick="${has ? `openCertTemplate('${esc(s.session_id)}')` : `handlePendingCert('${esc(s.session_id)}')`}"><div class="cmi"><div style="font-size:18px;margin-bottom:3px;">${has ? a.seal : '⏳'}</div><div class="cmit">${esc(s.title)}</div><div style="font-size:10px;opacity:.7;margin-top:2px;">${has ? fmtInt(s.certs) + (Number(s.certs) === 1 ? ' certificate created' : ' certificates created') : (Number(s.log_count) ? 'Attendance records available' : 'Awaiting Sync')}</div></div></div>`;
   }).join('') : `<div style="grid-column:1/-1;">${emptyState('🏆', 'No sessions with registrations yet.')}</div>`);
 
   const regs = (d.registrations || []).filter(r => !filter || r.session_id === filter);
   setHtml('a-cert-tbody', regs.length ? regs.map(r => {
     const pct = r.attendance_pct;
-    const attBadge = pct == null ? (r.attendance_status === 'ABSENT' ? '<span class="badge bg-r">Absent</span>' : '<span class="badge bg-gr">No data</span>') : `<span class="badge ${pct >= 80 ? 'bg-g' : 'bg-r'}">${Math.round(pct)}%</span>`;
+    const attBadge = pct == null ? (r.attendance_status === 'ABSENT' ? '<span class="badge bg-r">Absent</span>' : '<span class="badge bg-gr">No data</span>') : `<span class="badge ${pct >= 80 ? 'bg-g' : 'bg-r'}">${attendancePercent(pct)}</span>`;
     let cert, actions;
     if (r.certificate_id) {
       cert = r.cert_status === 'ISSUED' ? '<span class="badge bg-g">✓ Issued</span>' : r.cert_status === 'FAILED' ? '<span class="badge bg-r">✗ Failed</span>' : '<span class="badge bg-y">⏳ Pending</span>';
       actions = `<div style="display:flex;gap:4px;"><button class="btn btn-xs btn-ghost" onclick="handleDownloadCert('${esc(r.cert_pdf)}')">⬇ PDF</button><button class="btn btn-xs btn-ghost" onclick="handleResendCert('${esc(r.registration_id)}')">Resend</button></div>`;
     } else if (r.attendance_status === 'ATTENDED') {
       cert = '<span class="badge bg-y">Not generated</span>';
-      actions = `<button class="btn btn-xs btn-green" onclick="handleGenerateCertificates('${esc(r.session_id)}')">Generate</button>`;
+      actions = `<button class="btn btn-xs btn-green" onclick="handleGenerateCertificates('${esc(r.session_id)}')">Generate</button> <button class="btn btn-xs btn-ghost" onclick="handleOverrideCert('${esc(r.registration_id)}')">Review / Override</button>`;
     } else if (r.attendance_status === 'INCOMPLETE' || r.attendance_status === 'ABSENT') {
       cert = '<span class="badge bg-r">✗ Not Qualified</span>';
       actions = `<button class="btn btn-xs btn-ghost" onclick="handleOverrideCert('${esc(r.registration_id)}')">Override</button>`;
     } else {
-      cert = '<span class="badge bg-gr">Awaiting sync</span>';
-      actions = '—';
+      cert = '<span class="badge bg-gr">Pending review / sync</span>';
+      const session = (d.sessions || []).find(s => s.session_id === r.session_id);
+      actions = session?.status === 'Completed' ? `<button class="btn btn-xs btn-ghost" onclick="handleOverrideCert('${esc(r.registration_id)}')">Review / Override</button>` : '—';
     }
     return `<tr><td class="nc">${esc(r.member || r.email || '—')}</td><td>${esc(r.session)}</td><td>${attBadge}</td><td>${cert}</td><td>${r.email_sent_at ? '<span class="badge bg-g">✓ Sent</span>' : '—'}</td><td>${actions}</td></tr>`;
   }).join('') : emptyRow(6, 'No attendance records yet. They appear after a session starts and members have registered.'));
@@ -2189,7 +2252,7 @@ function handlePendingCert(sessionId) {
 }
 async function handleOverrideCert(registrationId) {
   const r = (ad().registrations || []).find(x => x.registration_id === registrationId); if (!r) return;
-  const reason = prompt(`Force-issue a certificate for ${r.member} even though they're below the 80% threshold?\n\nReason (this will be logged):`);
+  const reason = prompt(`Force-issue a certificate for ${r.member} using manually reviewed evidence instead of automatic attendance verification?\n\nReason (this will be logged):`);
   if (reason === null) return;
   if (!reason.trim()) { showToast('Please give a reason for the override.', 'error'); return; }
   try {
@@ -3100,26 +3163,33 @@ let autoSyncBusy = false;
 async function autoSyncAttendance() {
   if (autoSyncBusy || currentRole !== 'admin' || !adminData) return;
   const now = Date.now();
-  const due = (ad().sessions || []).filter(s => s.zoom_join_url && s.status !== 'Draft' && s.status !== 'Cancelled'
-    && Number(s.registered) > 0 && !Number(s.log_count)
+  const pending = new Set((ad().registrations || []).filter(r => r.attendance_status === 'REGISTERED').map(r => r.session_id));
+  const due = (ad().sessions || []).filter(s => ['Upcoming', 'Live', 'Completed'].includes(s.status)
+    && Number(s.registered) > 0 && (Number(s.log_count) ? (s.status !== 'Completed' || pending.has(s.session_id)) : s.zoom_join_url)
+    && !attendanceSyncInFlight.has(s.session_id)
     && new Date(s.end).getTime() + 5 * 60000 < now && now - new Date(s.end).getTime() < 30 * 864e5
     && (!autoSyncTried[s.session_id] || now - autoSyncTried[s.session_id] > 10 * 60000)).slice(0, 3);
   if (!due.length) return;
   autoSyncBusy = true;
-  let done = 0;
+  let refresh = false;
   try {
     for (const s of due) {
+      if (currentRole !== 'admin' || !loggedInUser) break;
+      if (attendanceSyncInFlight.has(s.session_id)) continue;
       autoSyncTried[s.session_id] = now;
-      const z = await zoomCall('sync_attendance', s.session_id);
-      if (!z.ok) { if (z.code && z.code !== 'zoom_error') break; continue; }      // Zoom not set up → stop trying this round
-      if (z.data.status !== 'imported') continue;
+      attendanceSyncInFlight.add(s.session_id);
       try {
-        const r = await rpc('admin_sync_attendance', { p_session: s.session_id });
-        if (!r.no_logs) { done++; logAdminAction('Synced Zoom attendance (automatic)', s.title, r); showToast(`📋 Attendance for "${s.title}" was fetched from Zoom and saved.`, 'success', 5000); }
-      } catch (_) { /* shown when the admin syncs by hand */ }
+        const { result: r, imported } = await syncSavedOrFetchAttendance(s.session_id);
+        if (!r.no_logs && (imported || Number(r.updated) || s.status !== 'Completed')) {
+          refresh = true;
+          logAdminAction('Synced Zoom attendance (automatic)', s.title, r);
+          showToast(`📋 Attendance for "${s.title}" was synchronized.`, 'success', 5000);
+        }
+      } catch (_) { refresh = true; /* retry on a later pass; manual sync shows errors */ }
+      finally { attendanceSyncInFlight.delete(s.session_id); }
     }
+    if (refresh && currentRole === 'admin' && loggedInUser) await loadAdminData();
   } finally { autoSyncBusy = false; }
-  if (done) await loadAdminData();
 }
 
 // ── Keep an open tab up to date: reload when the tab is looked at again ──
@@ -3259,7 +3329,7 @@ function notificationItems(role) {
     const d = md();
     const soon = (d.upcoming || []).filter(s => s.is_registered && new Date(s.start) - Date.now() < 7 * 864e5);
     if (soon.length) items.push(`${soon.length} registered session${soon.length === 1 ? '' : 's'} this week`);
-    const unpaid = (d.upcoming || []).filter(s => s.is_registered && !zoomReady(s) && Number(s.fee) > 0);
+    const unpaid = (d.upcoming || []).filter(s => s.is_registered && zoomPaymentNeeded(s));
     if (unpaid.length) items.push(`${unpaid.length} payment${unpaid.length === 1 ? '' : 's'} pending`);
     const recent = (d.certificates || []).filter(c => Date.now() - new Date(c.issued_at) < 7 * 864e5);
     if (recent.length) items.push(`${recent.length} new certificate${recent.length === 1 ? '' : 's'}`);
