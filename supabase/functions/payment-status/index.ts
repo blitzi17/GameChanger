@@ -1,3 +1,6 @@
+import { getVerifiedHitPayStatus } from "../_shared/hitpay-status.ts";
+import { validateHitPayCheckoutURL } from "../_shared/hitpay.ts";
+
 import { createAdminClient, createMemberClient } from "../_shared/supabase.ts";
 
 const APP_URL = "https://game-changer-sigma.vercel.app";
@@ -216,6 +219,7 @@ Deno.serve(async (req: Request) => {
         confirmed_at,
         gateway_verified_at,
         gateway_request_id,
+        gateway_checkout_url,
         hmac_signature,
         checkout_state,
         checkout_claimed_at,
@@ -267,6 +271,7 @@ Deno.serve(async (req: Request) => {
       checkout_state: payment.checkout_state,
       amount: payment.amount,
       currency: payment.currency,
+      can_continue_payment: false,
     };
 
     // Centralized non-successful response.
@@ -496,6 +501,86 @@ Deno.serve(async (req: Request) => {
     // ======================================================
     // 15. HANDLE REMAINING PAYMENT STATUSES
     // ======================================================
+
+    // HITPAY_STATUS_CONTINUATION_V1
+
+    if (
+      payment.transaction_status === "PENDING_PAYMENT" &&
+      payment.checkout_state === "CREATED" &&
+      payment.reconciliation_required === false &&
+      payment.gateway_verified_at === null &&
+      payment.hitpay_reference_id === null &&
+      validAmount &&
+      isNonEmptyString(payment.gateway_request_id) &&
+      isNonEmptyString(payment.gateway_checkout_url)
+    ) {
+      try {
+        const gateway = await getVerifiedHitPayStatus({
+          gatewayRequestId: payment.gateway_request_id,
+          orderReference: payment.order_reference_id,
+          amount: Number(payment.amount),
+          currency: payment.currency,
+        });
+
+        const canContinue =
+          gateway.status === "pending" &&
+          gateway.paymentDetailsAvailable &&
+          gateway.successfulPaymentCount === 0 &&
+          gateway.payments.every((attempt) =>
+            typeof attempt.status === "string" &&
+            ["failed", "canceled", "cancelled"].includes(
+              attempt.status.trim().toLowerCase()
+            )
+          );
+
+        if (canContinue) {
+
+          validateHitPayCheckoutURL(
+            payment.gateway_checkout_url
+          );
+
+          const { data: eligibility, error: eligibilityError } =
+            await supabase.rpc(
+              "hitpay_check_eligibility",
+              { p_session_id: payment.session_id },
+            );
+
+          if (!eligibilityError && eligibility?.eligible === true) {
+
+            return jsonResponse({
+              ...baseResponse,
+              session_id: payment.session_id,
+              status: "PENDING_PAYMENT",
+              verified: false,
+              gateway_payment_verified: false,
+              registered: false,
+              reconciliation_required: false,
+              can_continue_payment: true,
+              message:
+                "Your payment request is still pending. You may continue using your existing checkout.",
+              receipt: null,
+            });
+
+          }
+        }
+
+        if (
+          gateway.status === "completed" ||
+          gateway.successfulPaymentCount > 0
+        ) {
+          return nonSuccessfulResponse(
+            "PENDING_PAYMENT",
+            "Payment activity has been detected. Please wait for payment confirmation. Do not start another payment.",
+          );
+        }
+
+      } catch {
+        return nonSuccessfulResponse(
+          "PENDING_PAYMENT",
+          "Unable to verify the existing checkout. Please check your payment status again.",
+        );
+      }
+    }
 
     switch (payment.transaction_status) {
       case "PENDING_PAYMENT":
