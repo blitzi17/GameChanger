@@ -8,6 +8,7 @@ const APP_URL = "https://game-changer-sigma.vercel.app";
 const ALLOWED_ORIGINS = new Set([
   APP_URL,
   "https://game-changer-git-feature-proces-21fc05-karols-projects-95a784de.vercel.app",
+  "https://game-changer-git-fix-payment-ca-a3134f-karols-projects-95a784de.vercel.app",
 ]);
 
 function isNonEmptyString(value: unknown): value is string {
