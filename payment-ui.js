@@ -1034,6 +1034,229 @@ const GameChangerPaymentUI = (() => {
     // 7. PAYMENT STATUS DISPLAY
     // ========================================================
 
+    // HITPAY_CONTINUATION_CONTROLLER_V1
+
+    function hideContinuation() {
+        setHidden('hp-status-continue', true);
+        setDisabled('hp-status-continue', true);
+    }
+
+    async function resumeExistingPayment() {
+
+        if (
+            !checkoutIsReady() ||
+            !ownsPaymentInterface() ||
+            checkoutRequestInProgress ||
+            statusRequestInProgress ||
+            !GameChangerPayment.isOrderReference(
+                currentOrderReference
+            ) ||
+            element('hp-status-continue').hidden ||
+            element('hp-status-continue').disabled
+        ) {
+            return false;
+        }
+
+        const orderReference = currentOrderReference;
+        const userId = paymentOwnerId;
+        const generation = ++requestGeneration;
+        const controller = new AbortController();
+
+        activeCheckoutController = controller;
+        checkoutRequestInProgress = true;
+
+        function isCurrentRequest() {
+            return (
+                generation === requestGeneration &&
+                activeCheckoutController === controller &&
+                !controller.signal.aborted &&
+                currentOrderReference === orderReference &&
+                paymentOwnerId === userId &&
+                getActiveMemberId() === userId
+            );
+        }
+
+        hideContinuation();
+        setDisabled('hp-status-refresh', true);
+
+        try {
+
+            setValue(
+                'hp-status-message',
+                'Verifying your existing checkout...'
+            );
+
+            const status =
+                await GameChangerPayment.getPaymentStatus(
+                    orderReference,
+                    {
+                        expectedUserId: userId,
+                        signal: controller.signal
+                    }
+                );
+
+            if (!isCurrentRequest()) {
+                return false;
+            }
+
+            if (
+                status.can_continue_payment !== true ||
+                status.status !== 'PENDING_PAYMENT' ||
+                status.order_reference !== orderReference
+            ) {
+                renderStatus(status);
+                return false;
+            }
+
+            const sessionId = status.session_id;
+
+            const attemptKey = checkoutAttemptKey(
+                userId,
+                sessionId
+            );
+
+            const existingAttempt =
+                getCheckoutAttempt(attemptKey);
+
+            if (
+                existingAttempt &&
+                (
+                    existingAttempt.orderReference !==
+                        orderReference ||
+                    existingAttempt.status === 'REVIEW_REQUIRED'
+                )
+            ) {
+                throw new Error(
+                    'An unresolved checkout requires verification.'
+                );
+            }
+
+            if (!saveCheckoutAttempt(attemptKey, {
+                status: 'PENDING_PAYMENT',
+                orderReference
+            })) {
+                throw new Error(
+                    'Checkout protection is unavailable.'
+                );
+            }
+
+            const result =
+                await GameChangerPayment.createPayment(
+                    sessionId,
+                    {
+                        expectedUserId: userId,
+                        resumeOrderReference: orderReference,
+                        signal: controller.signal
+                    }
+                );
+
+            if (!isCurrentRequest()) {
+                return false;
+            }
+
+            if (
+                result.resumed !== true ||
+                result.orderReference !== orderReference ||
+                result.transactionId !== status.transaction_id ||
+                result.status !== 'PENDING_PAYMENT' ||
+                result.checkoutState !== 'CREATED' ||
+                result.provider !== 'HitPay' ||
+                result.environment !== 'sandbox' ||
+                result.currency !== 'PHP' ||
+                result.amount !== Number(status.amount)
+            ) {
+                throw new Error(
+                    'The original checkout could not be confirmed.'
+                );
+            }
+
+            const destination = new URL(result.checkoutURL);
+
+            if (
+                destination.protocol !== 'https:' ||
+                destination.username ||
+                destination.password ||
+                destination.port ||
+                destination.hash ||
+                destination.pathname === '/' ||
+                !GameChangerPayment.CONFIG
+                    .approvedCheckoutHostnames.includes(
+                        destination.hostname
+                    )
+            ) {
+                throw new Error(
+                    'The checkout destination is not approved.'
+                );
+            }
+
+            const { data, error } =
+                await sb.auth.getSession();
+
+            if (!isCurrentRequest()) {
+                return false;
+            }
+
+            if (
+                error ||
+                data?.session?.user?.id !== userId ||
+                !checkoutIsReady()
+            ) {
+                throw new Error(
+                    'Checkout could not be safely continued.'
+                );
+            }
+
+            if (!saveCheckoutAttempt(attemptKey, {
+                status: 'PENDING_PAYMENT',
+                orderReference
+            })) {
+                throw new Error(
+                    'Unable to preserve checkout protection.'
+                );
+            }
+
+            setValue(
+                'hp-status-message',
+                'Returning to your existing HitPay checkout...'
+            );
+
+            window.location.assign(destination.href);
+
+            return true;
+
+        } catch (error) {
+
+            if (!isCurrentRequest()) {
+                return false;
+            }
+
+            renderStatus({
+                status: error?.status === 'REVIEW_REQUIRED'
+                    ? 'REVIEW_REQUIRED'
+                    : 'CHECKOUT_UNCERTAIN',
+                message:
+                    'Unable to continue the existing checkout. ' +
+                    'Check Payment Status again.',
+                verified: false,
+                registered: false,
+                can_continue_payment: false,
+                receipt: null
+            });
+
+            return false;
+
+        } finally {
+
+            if (isCurrentRequest()) {
+                activeCheckoutController = null;
+                checkoutRequestInProgress = false;
+                setDisabled('hp-status-refresh', false);
+            }
+
+        }
+
+    }
+
     function renderStatus(result) {
 
         if (!ownsPaymentInterface()) {
@@ -1071,6 +1294,22 @@ const GameChangerPaymentUI = (() => {
         }
 
         const status = result.status;
+
+        hideContinuation();
+
+        const canContinue =
+            checkoutIsReady() &&
+            status === 'PENDING_PAYMENT' &&
+            result.can_continue_payment === true &&
+            result.order_reference === currentOrderReference &&
+            result.reconciliation_required === false &&
+            result.verified === false &&
+            result.registered === false;
+
+        if (canContinue) {
+            setHidden('hp-status-continue', false);
+            setDisabled('hp-status-continue', false);
+        }
 
         const statusBox = element('hp-status-box');
 
@@ -1161,8 +1400,10 @@ const GameChangerPaymentUI = (() => {
         const actionGuidance = {
 
             PENDING_PAYMENT:
-                'Check Payment Status again for updates. ' +
-                'Do not start another payment.',
+                canContinue
+                    ? 'Select Continue Payment to reopen your existing checkout.'
+                    : 'Check Payment Status again for updates. ' +
+                      'Do not start another payment.',
 
             PAID:
                 'Your verified payment receipt is available.',
@@ -1265,6 +1506,7 @@ const GameChangerPaymentUI = (() => {
 
         if (
             statusRequestInProgress ||
+            checkoutRequestInProgress ||
             !ownsPaymentInterface() ||
             !GameChangerPayment.isOrderReference(
                 currentOrderReference
@@ -1301,6 +1543,8 @@ const GameChangerPaymentUI = (() => {
         try {
 
             clearReceiptFields();
+
+            hideContinuation();
 
             setDisabled('hp-status-refresh', true);
 
@@ -1545,6 +1789,8 @@ const GameChangerPaymentUI = (() => {
 
     function reset() {
 
+        hideContinuation();
+
         requestGeneration += 1;
 
         const previousCheckoutController =
@@ -1646,6 +1892,13 @@ const GameChangerPaymentUI = (() => {
         ).addEventListener(
             'click',
             refreshStatus
+        );
+
+        element(
+            'hp-status-continue'
+        ).addEventListener(
+            'click',
+            resumeExistingPayment
         );
 
         element(

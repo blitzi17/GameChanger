@@ -619,12 +619,36 @@ const GameChangerPayment = (() => {
 
         }
 
+        // HITPAY_CLIENT_ORDER_BINDING_V1
+
+        const resumeOrderReference =
+            options.resumeOrderReference;
+
+        const isContinuation =
+            resumeOrderReference !== undefined;
+
+        if (
+            isContinuation &&
+            !isOrderReference(resumeOrderReference)
+        ) {
+            throw new PaymentError(
+                'Invalid continuation order reference.'
+            );
+        }
+
         const result = await request(
 
             CONFIG.createPaymentFunction,
 
             {
-                session_id: sessionId
+                session_id: sessionId,
+
+                ...(isContinuation
+                    ? {
+                        resume_order_reference:
+                            resumeOrderReference
+                    }
+                    : {})
             },
 
             {
@@ -709,6 +733,26 @@ const GameChangerPayment = (() => {
 
         }
 
+        if (
+            isContinuation &&
+            (
+                orderReference !== resumeOrderReference ||
+                result.resumed !== true
+            )
+        ) {
+            throw new PaymentError(
+
+                'The original checkout could not be confirmed.',
+
+                {
+                    status: STATUS.CHECKOUT_UNCERTAIN,
+
+                    orderReference: resumeOrderReference
+                }
+
+            );
+        }
+
         const checkoutURL = validateCheckoutURL(
             result.checkout_url,
             orderReference
@@ -727,6 +771,9 @@ const GameChangerPayment = (() => {
                 result.checkout_state,
 
             checkoutURL,
+
+            resumed:
+                result.resumed === true,
 
             amount:
                 Number(result.amount),
@@ -891,6 +938,8 @@ const GameChangerPayment = (() => {
 
                 registered: false,
 
+                can_continue_payment: false,
+
                 receipt: null
 
             };
@@ -938,9 +987,43 @@ const GameChangerPayment = (() => {
 
             }
 
-            return result;
+            return {
+                ...result,
+                can_continue_payment: false
+            };
 
         }
+
+        // HITPAY_CLIENT_CONTINUATION_V1
+
+        // Only accept explicitly authorized continuation
+        // for a valid pending checkout.
+
+        const canContinuePayment =
+
+            result.can_continue_payment === true &&
+
+            result.status === STATUS.PENDING &&
+
+            result.checkout_state === 'CREATED' &&
+
+            result.reconciliation_required === false &&
+
+            result.verified === false &&
+
+            result.gateway_payment_verified === false &&
+
+            result.registered === false &&
+
+            result.receipt === null &&
+
+            isUUID(result.transaction_id) &&
+
+            isUUID(result.session_id) &&
+
+            isValidAmount(result.amount) &&
+
+            result.currency === CONFIG.currency;
 
         // Non-successful payment statuses must not
         // expose a successful receipt or registration.
@@ -952,6 +1035,8 @@ const GameChangerPayment = (() => {
             verified: false,
 
             registered: false,
+
+            can_continue_payment: canContinuePayment,
 
             receipt: null
 

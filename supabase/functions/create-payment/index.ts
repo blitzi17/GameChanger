@@ -1,3 +1,11 @@
+import {
+  getVerifiedHitPayStatus,
+  canResumeHitPayCheckout,
+} from "../_shared/hitpay-status.ts";
+import {
+  validateHitPayCheckoutURL as validateRecoveryCheckoutURL,
+} from "../_shared/hitpay.ts";
+
 import { createAdminClient, createMemberClient } from "../_shared/supabase.ts";
 
 import {
@@ -11,6 +19,7 @@ const APP_URL = "https://game-changer-sigma.vercel.app";
 const ALLOWED_ORIGINS = new Set([
   APP_URL,
   "https://game-changer-git-feature-proces-21fc05-karols-projects-95a784de.vercel.app",
+  "https://game-changer-git-fix-payment-ca-a3134f-karols-projects-95a784de.vercel.app",
 ]);
 
 // Standard reconciliation response.
@@ -129,7 +138,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { session_id } = body as Record<string, unknown>;
+    const {
+      session_id,
+      resume_order_reference,
+    } = body as Record<string, unknown>;
+
+    // HITPAY_ORDER_BOUND_CONTINUATION_V1
+
+    const isContinuation =
+      resume_order_reference !== undefined;
+
+    const orderPattern =
+      /^GC-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (
+      isContinuation &&
+      (
+        typeof resume_order_reference !== "string" ||
+        !orderPattern.test(resume_order_reference)
+      )
+    ) {
+      return jsonResponse(
+        { error: "Invalid continuation order reference." },
+        400,
+      );
+    }
 
     const uuidPattern =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -257,26 +290,73 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 6. Create or retrieve pending transaction.
-    const {
-      data: payment,
-      error: paymentError,
-    } = await supabase.rpc(
-      "hitpay_create_pending",
-      {
-        p_session_id: session_id,
-      },
-    );
+    // 6. Prepare the requested payment operation.
 
-    if (
-      paymentError ||
-      !payment ||
-      typeof payment.transaction_id !== "string"
-    ) {
-      return jsonResponse(
-        { error: "Unable to prepare payment." },
-        400,
+    let transactionId: string;
+
+    if (isContinuation) {
+
+      // Continuation must never create a transaction.
+
+      const {
+        data: existing,
+        error: existingError,
+      } = await admin
+        .from("payment_transactions")
+        .select("transaction_id")
+        .eq("order_reference_id", resume_order_reference)
+        .eq("user_id", user.id)
+        .eq("session_id", session_id)
+        .eq("payment_provider", "HITPAY")
+        .eq("is_sandbox", true)
+        .eq("transaction_status", "PENDING_PAYMENT")
+        .eq("checkout_state", "CREATED")
+        .eq("reconciliation_required", false)
+        .is("gateway_verified_at", null)
+        .is("hitpay_reference_id", null)
+        .maybeSingle();
+
+      if (
+        existingError ||
+        !existing ||
+        typeof existing.transaction_id !== "string"
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            error: "The original checkout cannot be continued.",
+          },
+          409,
+        );
+      }
+
+      transactionId = existing.transaction_id;
+
+    } else {
+
+      const {
+        data: payment,
+        error: paymentError,
+      } = await supabase.rpc(
+        "hitpay_create_pending",
+        {
+          p_session_id: session_id,
+        },
       );
+
+      if (
+        paymentError ||
+        !payment ||
+        typeof payment.transaction_id !== "string"
+      ) {
+        return jsonResponse(
+          { error: "Unable to prepare payment." },
+          400,
+        );
+      }
+
+      transactionId = payment.transaction_id;
+
     }
 
     // 7. Retrieve the stored transaction.
@@ -298,7 +378,7 @@ Deno.serve(async (req: Request) => {
         checkout_state,
         reconciliation_required
       `)
-      .eq("transaction_id", payment.transaction_id)
+      .eq("transaction_id", transactionId)
       .eq("user_id", user.id)
       .eq("session_id", session_id)
       .eq("payment_provider", "HITPAY")
@@ -368,21 +448,134 @@ Deno.serve(async (req: Request) => {
     }
 
     // 12. Handle an existing checkout.
-    // Do not return an existing checkout URL without
-    // independently confirming its gateway state.
-    if (transaction.checkout_state === "CREATED") {
+    // HITPAY_CHECKOUT_CONTINUATION_V1
+    if (
+      isContinuation &&
+      (
+        transaction.order_reference_id !== resume_order_reference ||
+        transaction.checkout_state !== "CREATED"
+      )
+    ) {
       return jsonResponse(
         {
           success: false,
-          status: "PENDING_PAYMENT",
-          checkout_state: "CREATED",
-          transaction_id: transaction.transaction_id,
-          order_reference: transaction.order_reference_id,
-          error:
-            "An existing checkout is awaiting payment verification. Check your payment status before another attempt.",
+          error: "The original checkout is no longer available.",
         },
         409,
       );
+    }
+
+    if (transaction.checkout_state === "CREATED") {
+
+      const pendingResponse = (message: string) =>
+        jsonResponse(
+          {
+            success: false,
+            status: "PENDING_PAYMENT",
+            checkout_state: "CREATED",
+            transaction_id: transaction.transaction_id,
+            order_reference: transaction.order_reference_id,
+            error: message,
+          },
+          409,
+        );
+
+      if (
+        typeof transaction.gateway_request_id !== "string" ||
+        typeof transaction.gateway_checkout_url !== "string"
+      ) {
+        return reconciliationResponse(
+          transaction.order_reference_id,
+        );
+      }
+
+      try {
+
+        const gateway = await getVerifiedHitPayStatus({
+          gatewayRequestId: transaction.gateway_request_id,
+          orderReference: transaction.order_reference_id,
+          amount,
+          currency: transaction.currency,
+        });
+
+        // Only resume the same verified pending request.
+        // Never create a replacement request here.
+
+        if (!canResumeHitPayCheckout(gateway)) {
+          return pendingResponse(
+            "This checkout requires payment verification. Check your payment status before continuing."
+          );
+        }
+
+        const checkoutUrl = validateRecoveryCheckoutURL(
+          transaction.gateway_checkout_url
+        );
+
+        // Recheck the local transaction after the gateway lookup.
+        const {
+          data: current,
+          error: currentError,
+        } = await admin
+          .from("payment_transactions")
+          .select(`
+            transaction_status,
+            checkout_state,
+            reconciliation_required,
+            gateway_verified_at,
+            hitpay_reference_id,
+            gateway_request_id,
+            gateway_checkout_url,
+            amount,
+            currency,
+            order_reference_id
+          `)
+          .eq("transaction_id", transaction.transaction_id)
+          .eq("user_id", user.id)
+          .eq("session_id", session_id)
+          .eq("payment_provider", "HITPAY")
+          .eq("is_sandbox", true)
+          .single();
+
+        if (
+          currentError ||
+          !current ||
+          current.transaction_status !== "PENDING_PAYMENT" ||
+          current.checkout_state !== "CREATED" ||
+          current.reconciliation_required !== false ||
+          current.gateway_verified_at !== null ||
+          current.hitpay_reference_id !== null ||
+          current.gateway_request_id !== transaction.gateway_request_id ||
+          current.gateway_checkout_url !== transaction.gateway_checkout_url ||
+          Number(current.amount) !== amount ||
+          current.currency !== transaction.currency ||
+          current.order_reference_id !== transaction.order_reference_id
+        ) {
+          return pendingResponse(
+            "Payment information has changed. Check your payment status again."
+          );
+        }
+
+        // Return the original single-use checkout.
+        return jsonResponse({
+          success: true,
+          status: "PENDING_PAYMENT",
+          checkout_state: "CREATED",
+          reconciliation_required: false,
+          transaction_id: transaction.transaction_id,
+          order_reference: transaction.order_reference_id,
+          amount,
+          currency: transaction.currency,
+          checkout_url: checkoutUrl,
+          resumed: true,
+        });
+
+      } catch {
+
+        return pendingResponse(
+          "Unable to verify the existing checkout. Please check your payment status again."
+        );
+
+      }
     }
 
     // 13. Handle checkout creation in progress.
